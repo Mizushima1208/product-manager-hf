@@ -1494,3 +1494,173 @@ textarea.form-input {
         height: 150px;
     }
 }
+
+/* ==================== モバイル対応 ==================== */
+@media (max-width: 768px) {
+    /* ヘッダー */
+    header {
+        padding: 12px 16px;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    header h1 {
+        font-size: 1.2rem;
+    }
+
+    /* ナビゲーション */
+    .page-nav {
+        width: 100%;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .page-nav a {
+        padding: 8px 16px;
+        font-size: 0.85rem;
+    }
+
+    /* メインコンテナ */
+    .main-container {
+        padding: 12px;
+        gap: 16px;
+    }
+
+    /* カード */
+    .section-card {
+        padding: 16px;
+    }
+
+    .section-card h2 {
+        font-size: 1.1rem;
+    }
+
+    /* 機械カードグリッド */
+    .equipment-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 12px;
+    }
+
+    .equipment-card {
+        padding: 8px;
+    }
+
+    .equipment-image {
+        height: 100px;
+    }
+
+    .equipment-name {
+        font-size: 0.85rem;
+    }
+
+    .equipment-serial, .equipment-model {
+        font-size: 0.75rem;
+    }
+
+    /* 看板カードグリッド */
+    .signboard-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 12px;
+    }
+
+    .signboard-card {
+        padding: 10px;
+    }
+
+    .signboard-image {
+        height: 80px;
+    }
+
+    .signboard-comment {
+        font-size: 0.85rem;
+    }
+
+    /* 数量入力 */
+    .qty-dual-input {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .qty-change-block {
+        padding: 8px;
+    }
+
+    .qty-input, .qty-reason {
+        font-size: 14px;
+    }
+
+    /* モーダル */
+    .modal-content {
+        width: 95%;
+        max-height: 90vh;
+        margin: 5vh auto;
+    }
+
+    .modal-header h2 {
+        font-size: 1.1rem;
+    }
+
+    .modal-body {
+        padding: 16px;
+    }
+
+    /* ボタン */
+    .btn {
+        padding: 10px 16px;
+        font-size: 0.9rem;
+    }
+
+    .btn-group {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .btn-group .btn {
+        width: 100%;
+    }
+
+    /* フォーム */
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+        font-size: 16px; /* iOS zoom防止 */
+    }
+
+    /* 検索ボタン */
+    .search-manual-section {
+        flex-direction: column;
+    }
+
+    .btn-search {
+        width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    /* 超小型デバイス */
+    .equipment-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    .signboard-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    header h1 {
+        font-size: 1rem;
+    }
+
+    .page-nav a {
+        padding: 6px 12px;
+        font-size: 0.8rem;
+    }
+
+    .equipment-image {
+        height: 150px;
+    }
+
+    .signboard-image {
+        height: 120px;
+    }
+}
