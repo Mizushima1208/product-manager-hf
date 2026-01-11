@@ -644,7 +644,7 @@ function renderEquipmentCard(equipment) {
     return `
         <div class="equipment-card" onclick="showEquipmentDetail(${equipment.id})" style="cursor: pointer;">
             <div class="equipment-image">
-                <img src="${imagePath}" alt="${equipment.equipment_name || ''}" onerror="this.onerror=null; this.src='${DEFAULT_IMAGE}'">
+                <img src="${imagePath}" alt="${equipment.equipment_name || ''}" onerror="this.style.display='none'">
                 ${categoryBadge}
             </div>
             <div class="equipment-info">
