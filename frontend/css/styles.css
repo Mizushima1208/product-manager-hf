@@ -1077,6 +1077,24 @@ textarea.form-input {
     min-height: 1.1em;
 }
 
+.qty-quick-buttons {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 12px;
+    padding: 8px;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+}
+
+.qty-quick-buttons .qty-current {
+    font-size: 1.5rem;
+    font-weight: 700;
+    min-width: 50px;
+    text-align: center;
+}
+
 .qty-btn {
     width: 40px;
     height: 40px;

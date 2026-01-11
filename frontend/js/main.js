@@ -1161,7 +1161,11 @@ function renderSignboardCard(signboard) {
                 <div class="signboard-desc">${signboard.description || ''}</div>
             </div>
             <div class="signboard-quantity">
-                <span class="qty-current" id="qty-${signboard.id}">${quantity}</span>
+                <div class="qty-quick-buttons">
+                    <button class="qty-btn minus" onclick="decrementSignboard(${signboard.id})" ${quantity === 0 ? 'disabled' : ''}>−</button>
+                    <span class="qty-current" id="qty-${signboard.id}">${quantity}</span>
+                    <button class="qty-btn plus" onclick="incrementSignboard(${signboard.id})">＋</button>
+                </div>
                 <div class="qty-dual-input">
                     <div class="qty-change-block plus">
                         <div class="qty-input-row">
