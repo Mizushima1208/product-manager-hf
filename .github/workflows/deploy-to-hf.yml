@@ -1,0 +1,23 @@
+# Hugging Face Spaces への自動デプロイ
+# cf: https://huggingface.co/docs/hub/spaces-github-actions
+name: Deploy to Hugging Face Spaces
+
+on:
+  push:
+    branches: [main]
+
+  workflow_dispatch:
+
+jobs:
+  sync-to-hub:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          lfs: true
+
+      - name: Push to Hugging Face Hub
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: git push -f https://Ryo12ju:$HF_TOKEN@huggingface.co/spaces/Ryo12ju/product-manager main:main
