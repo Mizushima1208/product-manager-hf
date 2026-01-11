@@ -1158,31 +1158,10 @@ function renderSignboardCard(signboard) {
             </div>
             <div class="signboard-info">
                 <div class="signboard-name">${signboard.comment || '-'}</div>
-                <div class="signboard-desc">${signboard.description || ''}</div>
-            </div>
-            <div class="signboard-quantity">
-                <div class="qty-quick-buttons">
-                    <button class="qty-btn minus" onclick="decrementSignboard(${signboard.id})" ${quantity === 0 ? 'disabled' : ''}>−</button>
-                    <span class="qty-current" id="qty-${signboard.id}">${quantity}</span>
-                    <button class="qty-btn plus" onclick="incrementSignboard(${signboard.id})">＋</button>
-                </div>
-                <div class="qty-dual-input">
-                    <div class="qty-change-block plus">
-                        <div class="qty-input-row">
-                            <span class="qty-label plus">＋</span>
-                            <input type="number" class="qty-input" id="qty-add-${signboard.id}" min="1" placeholder="数量">
-                        </div>
-                        <input type="text" class="qty-reason" id="reason-add-${signboard.id}" placeholder="理由（必須）">
-                        <button class="qty-btn-apply plus" onclick="addSignboardQuantity(${signboard.id})">追加</button>
-                    </div>
-                    <div class="qty-change-block minus">
-                        <div class="qty-input-row">
-                            <span class="qty-label minus">−</span>
-                            <input type="number" class="qty-input" id="qty-sub-${signboard.id}" min="1" placeholder="数量">
-                        </div>
-                        <input type="text" class="qty-reason" id="reason-sub-${signboard.id}" placeholder="理由（必須）">
-                        <button class="qty-btn-apply minus" onclick="subtractSignboardQuantity(${signboard.id})">減少</button>
-                    </div>
+                <div class="signboard-qty-inline">
+                    <button class="qty-btn-small minus" onclick="event.stopPropagation(); decrementSignboard(${signboard.id})" ${quantity === 0 ? 'disabled' : ''}>−</button>
+                    <span class="qty-number" id="qty-${signboard.id}">${quantity}</span>
+                    <button class="qty-btn-small plus" onclick="event.stopPropagation(); incrementSignboard(${signboard.id})">＋</button>
                 </div>
             </div>
         </div>`;

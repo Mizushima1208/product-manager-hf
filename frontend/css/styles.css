@@ -1077,22 +1077,62 @@ textarea.form-input {
     min-height: 1.1em;
 }
 
-.qty-quick-buttons {
+/* 看板カード用インライン数量表示 */
+.signboard-qty-inline {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 12px;
-    margin-bottom: 12px;
-    padding: 8px;
-    background: var(--bg-secondary);
-    border-radius: 8px;
+    gap: 8px;
+    margin-top: 8px;
 }
 
-.qty-quick-buttons .qty-current {
-    font-size: 1.5rem;
+.signboard-qty-inline .qty-number {
+    font-size: 1.3rem;
     font-weight: 700;
-    min-width: 50px;
+    min-width: 40px;
     text-align: center;
+    color: var(--text-primary);
+}
+
+.qty-btn-small {
+    width: 28px;
+    height: 28px;
+    border: 2px solid;
+    border-radius: 50%;
+    background: var(--bg-card);
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+.qty-btn-small.plus {
+    border-color: #059669;
+    color: #059669;
+}
+
+.qty-btn-small.plus:hover {
+    background: #059669;
+    color: white;
+}
+
+.qty-btn-small.minus {
+    border-color: #dc2626;
+    color: #dc2626;
+}
+
+.qty-btn-small.minus:hover:not(:disabled) {
+    background: #dc2626;
+    color: white;
+}
+
+.qty-btn-small:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
 }
 
 .qty-btn {
