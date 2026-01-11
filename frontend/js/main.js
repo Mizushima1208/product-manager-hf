@@ -1158,10 +1158,18 @@ function renderSignboardCard(signboard) {
             </div>
             <div class="signboard-info">
                 <div class="signboard-name">${signboard.comment || '-'}</div>
-                <div class="signboard-qty-inline">
-                    <button class="qty-btn-small minus" onclick="event.stopPropagation(); decrementSignboard(${signboard.id})" ${quantity === 0 ? 'disabled' : ''}>−</button>
-                    <span class="qty-number" id="qty-${signboard.id}">${quantity}</span>
-                    <button class="qty-btn-small plus" onclick="event.stopPropagation(); incrementSignboard(${signboard.id})">＋</button>
+                <div class="signboard-current-qty">現在: <span id="qty-${signboard.id}">${quantity}</span></div>
+            </div>
+            <div class="signboard-qty-control">
+                <div class="qty-buttons-vertical">
+                    <button class="qty-btn-v plus" onclick="setSignboardMode(${signboard.id}, 'plus')">＋</button>
+                    <button class="qty-btn-v minus" onclick="setSignboardMode(${signboard.id}, 'minus')">−</button>
+                </div>
+                <div class="qty-input-area">
+                    <input type="number" class="qty-input-sm" id="qty-input-${signboard.id}" min="1" value="1" placeholder="数量">
+                    <input type="text" class="qty-reason-sm" id="reason-input-${signboard.id}" placeholder="理由">
+                    <input type="hidden" id="mode-${signboard.id}" value="plus">
+                    <button class="qty-register-btn" onclick="registerSignboardQty(${signboard.id})">登録</button>
                 </div>
             </div>
         </div>`;
@@ -1327,6 +1335,69 @@ window.subtractSignboardQuantity = async function(id) {
         inputEl.value = '';
         reasonEl.value = '';
         showToast(`${subValue}枚減少しました（計${data.signboard.quantity}枚）`);
+        updateSignboardsSummaryFromDOM();
+    } catch (error) {
+        showToast(error.message || '更新に失敗しました', 'error');
+    }
+};
+
+// +/-モード切替
+window.setSignboardMode = function(id, mode) {
+    const modeInput = document.getElementById(`mode-${id}`);
+    if (modeInput) modeInput.value = mode;
+
+    // ボタンのアクティブ状態を更新
+    const card = modeInput.closest('.signboard-card');
+    if (card) {
+        card.querySelectorAll('.qty-btn-v').forEach(btn => btn.classList.remove('active'));
+        card.querySelector(`.qty-btn-v.${mode}`).classList.add('active');
+    }
+};
+
+// 数量登録
+window.registerSignboardQty = async function(id) {
+    const modeInput = document.getElementById(`mode-${id}`);
+    const qtyInput = document.getElementById(`qty-input-${id}`);
+    const reasonInput = document.getElementById(`reason-input-${id}`);
+    const qtyDisplay = document.getElementById(`qty-${id}`);
+
+    const mode = modeInput?.value || 'plus';
+    const amount = parseInt(qtyInput?.value) || 0;
+    const reason = reasonInput?.value?.trim() || '';
+
+    if (amount <= 0) {
+        showToast('数量を入力してください', 'error');
+        qtyInput?.focus();
+        return;
+    }
+
+    if (!reason) {
+        showToast('理由を入力してください', 'error');
+        reasonInput?.focus();
+        return;
+    }
+
+    const endpoint = mode === 'plus' ? 'add' : 'subtract';
+
+    try {
+        const response = await fetch(`/api/signboards/${id}/${endpoint}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount: amount, reason: reason })
+        });
+
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.detail || '更新失敗');
+        }
+
+        const data = await response.json();
+        if (qtyDisplay) qtyDisplay.textContent = data.signboard.quantity;
+        qtyInput.value = '1';
+        reasonInput.value = '';
+
+        const action = mode === 'plus' ? '追加' : '減少';
+        showToast(`${amount}枚${action}しました（計${data.signboard.quantity}枚）`);
         updateSignboardsSummaryFromDOM();
     } catch (error) {
         showToast(error.message || '更新に失敗しました', 'error');

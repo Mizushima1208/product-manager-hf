@@ -1077,62 +1077,109 @@ textarea.form-input {
     min-height: 1.1em;
 }
 
-/* 看板カード用インライン数量表示 */
-.signboard-qty-inline {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    margin-top: 8px;
-}
-
-.signboard-qty-inline .qty-number {
-    font-size: 1.3rem;
-    font-weight: 700;
-    min-width: 40px;
-    text-align: center;
+/* 看板カード 現在数量表示 */
+.signboard-current-qty {
+    font-size: 1.1rem;
+    font-weight: 600;
     color: var(--text-primary);
+    margin-top: 4px;
 }
 
-.qty-btn-small {
-    width: 28px;
-    height: 28px;
+.signboard-current-qty span {
+    font-size: 1.3rem;
+    color: var(--accent);
+}
+
+/* 看板カード 数量操作エリア */
+.signboard-qty-control {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-light);
+}
+
+.qty-buttons-vertical {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.qty-btn-v {
+    width: 36px;
+    height: 36px;
     border: 2px solid;
-    border-radius: 50%;
+    border-radius: 6px;
     background: var(--bg-card);
-    font-size: 1rem;
+    font-size: 1.2rem;
     font-weight: 700;
     cursor: pointer;
     transition: all 0.2s ease;
     display: flex;
     align-items: center;
     justify-content: center;
-    line-height: 1;
 }
 
-.qty-btn-small.plus {
+.qty-btn-v.plus {
     border-color: #059669;
     color: #059669;
 }
 
-.qty-btn-small.plus:hover {
+.qty-btn-v.plus:hover,
+.qty-btn-v.plus.active {
     background: #059669;
     color: white;
 }
 
-.qty-btn-small.minus {
+.qty-btn-v.minus {
     border-color: #dc2626;
     color: #dc2626;
 }
 
-.qty-btn-small.minus:hover:not(:disabled) {
+.qty-btn-v.minus:hover,
+.qty-btn-v.minus.active {
     background: #dc2626;
     color: white;
 }
 
-.qty-btn-small:disabled {
-    opacity: 0.3;
-    cursor: not-allowed;
+.qty-input-area {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1;
+}
+
+.qty-input-sm {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.qty-reason-sm {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.qty-register-btn {
+    padding: 8px 12px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.qty-register-btn:hover {
+    background: var(--accent-hover);
 }
 
 .qty-btn {
