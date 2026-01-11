@@ -717,14 +717,6 @@ function renderEquipmentRow(equipment) {
         </tr>`;
 }
 
-// HTML特殊文字エスケープ
-function escapeHtml(str) {
-    if (!str) return '';
-    return str.replace(/[&<>"']/g, (m) => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-    }[m]));
-}
-
 // 仕様書検索
 window.searchSpecSheet = async function(equipmentId) {
     showToast('仕様書を検索中...');

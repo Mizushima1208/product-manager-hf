@@ -15,8 +15,8 @@ app = FastAPI(title="Equipment Manager API", version="1.0.0")
 security = HTTPBasic()
 
 # 環境変数から認証情報を取得（デフォルト値は開発用）
-AUTH_USERNAME = os.environ.get("AUTH_USERNAME", "admin")
-AUTH_PASSWORD = os.environ.get("AUTH_PASSWORD", "mizushima2024")
+AUTH_USERNAME = os.environ.get("AUTH_USERNAME", "pmuser7x3k")
+AUTH_PASSWORD = os.environ.get("AUTH_PASSWORD", "Kj9mPv2nXq8wR4")
 
 
 def verify_credentials(credentials: HTTPBasicCredentials = Depends(security)):
