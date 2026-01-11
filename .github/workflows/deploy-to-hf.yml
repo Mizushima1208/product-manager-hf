@@ -14,10 +14,27 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          fetch-depth: 0
           lfs: true
 
-      - name: Push to Hugging Face Hub
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install huggingface_hub
+        run: pip install huggingface_hub
+
+      - name: Upload to Hugging Face Spaces
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: git push -f https://Ryo12ju:$HF_TOKEN@huggingface.co/spaces/Ryo12ju/product-manager main:main
+        run: |
+          python -c "
+          from huggingface_hub import HfApi
+          api = HfApi()
+          api.upload_folder(
+              folder_path='.',
+              repo_id='Ryo12ju/product-manager',
+              repo_type='space',
+              ignore_patterns=['.git*', '__pycache__', '*.pyc'],
+          )
+          "
