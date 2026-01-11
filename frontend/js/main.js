@@ -1067,8 +1067,82 @@ function openSignboardModal(signboard = null) {
     document.getElementById('signboard-status').value = signboard?.status || '在庫あり';
     document.getElementById('signboard-notes').value = signboard?.notes || '';
 
+    // テンプレート関連のリセット
+    const templateIdEl = document.getElementById('signboard-template-id');
+    if (templateIdEl) templateIdEl.value = '';
+    const previewEl = document.getElementById('signboard-image-preview');
+    if (previewEl) previewEl.innerHTML = '';
+    const uploadInput = document.getElementById('signboard-image-upload');
+    if (uploadInput) uploadInput.value = '';
+
+    // テンプレート画像を読み込み
+    loadSignboardTemplates();
+
     document.getElementById('signboard-modal').classList.add('visible');
 }
+
+// テンプレート画像読み込み
+async function loadSignboardTemplates() {
+    const loadingEl = document.getElementById('signboard-templates-loading');
+    const gridEl = document.getElementById('signboard-templates-grid');
+    const errorEl = document.getElementById('signboard-templates-error');
+
+    if (!loadingEl || !gridEl || !errorEl) return;
+
+    loadingEl.style.display = 'block';
+    gridEl.style.display = 'none';
+    errorEl.style.display = 'none';
+
+    try {
+        const response = await fetch('/api/google-drive/signboard-templates');
+        if (!response.ok) throw new Error('テンプレート読み込み失敗');
+
+        const data = await response.json();
+        const files = data.files || [];
+
+        if (files.length === 0) {
+            loadingEl.textContent = 'テンプレート画像がありません';
+            return;
+        }
+
+        gridEl.innerHTML = files.map(f => `
+            <div class="template-item" data-id="${f.id}" data-name="${escapeHtml(f.name)}" onclick="selectSignboardTemplate('${f.id}', '${escapeHtml(f.name)}')">
+                <img src="${f.thumbnail_url}" alt="${escapeHtml(f.name)}" loading="lazy">
+                <div class="template-name">${escapeHtml(f.name.replace(/\.[^.]+$/, ''))}</div>
+            </div>
+        `).join('');
+
+        loadingEl.style.display = 'none';
+        gridEl.style.display = 'grid';
+    } catch (error) {
+        loadingEl.style.display = 'none';
+        errorEl.textContent = '⚠️ テンプレート読み込み失敗（Google Drive未接続の可能性）';
+        errorEl.style.display = 'block';
+    }
+}
+
+// テンプレート選択
+window.selectSignboardTemplate = function(id, name) {
+    // 選択状態を更新
+    document.querySelectorAll('.template-item').forEach(el => el.classList.remove('selected'));
+    const selected = document.querySelector(`.template-item[data-id="${id}"]`);
+    if (selected) selected.classList.add('selected');
+
+    // 隠しフィールドに設定
+    document.getElementById('signboard-template-id').value = id;
+
+    // コメント欄にファイル名を自動入力（拡張子除去）
+    const commentInput = document.getElementById('signboard-comment');
+    if (!commentInput.value) {
+        commentInput.value = name.replace(/\.[^.]+$/, '');
+    }
+
+    // アップロードをクリア
+    const uploadInput = document.getElementById('signboard-image-upload');
+    if (uploadInput) uploadInput.value = '';
+    const previewEl = document.getElementById('signboard-image-preview');
+    if (previewEl) previewEl.innerHTML = '';
+};
 
 function closeSignboardModal() {
     document.getElementById('signboard-modal').classList.remove('visible');
@@ -1086,6 +1160,16 @@ async function saveSignboard() {
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-small"></span> 保存中...';
 
+    // テンプレートIDまたはアップロード画像を取得
+    const templateIdEl = document.getElementById('signboard-template-id');
+    const templateId = templateIdEl ? templateIdEl.value : '';
+
+    let imagePath = null;
+    if (templateId) {
+        // Google Driveテンプレートを選択した場合
+        imagePath = `/api/google-drive/image/${templateId}`;
+    }
+
     const data = {
         comment: comment,
         description: document.getElementById('signboard-description').value.trim() || null,
@@ -1093,7 +1177,8 @@ async function saveSignboard() {
         quantity: parseInt(document.getElementById('signboard-quantity').value) || 1,
         location: document.getElementById('signboard-location').value.trim() || null,
         status: document.getElementById('signboard-status').value,
-        notes: document.getElementById('signboard-notes').value.trim() || null
+        notes: document.getElementById('signboard-notes').value.trim() || null,
+        image_path: imagePath
     };
 
     try {
