@@ -1,12 +1,35 @@
 """Equipment Manager API - Main Entry Point."""
+import os
+import secrets
 from pathlib import Path
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from routers import equipment_router, google_drive_router, config_router, signboards_router, search_router
 
 app = FastAPI(title="Equipment Manager API", version="1.0.0")
+
+# 認証設定
+security = HTTPBasic()
+
+# 環境変数から認証情報を取得（デフォルト値は開発用）
+AUTH_USERNAME = os.environ.get("AUTH_USERNAME", "admin")
+AUTH_PASSWORD = os.environ.get("AUTH_PASSWORD", "mizushima2024")
+
+
+def verify_credentials(credentials: HTTPBasicCredentials = Depends(security)):
+    """Basic認証の検証."""
+    correct_username = secrets.compare_digest(credentials.username, AUTH_USERNAME)
+    correct_password = secrets.compare_digest(credentials.password, AUTH_PASSWORD)
+    if not (correct_username and correct_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="認証に失敗しました",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
 
 # フロントエンドの静的ファイル配信
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
@@ -29,8 +52,8 @@ app.include_router(search_router)
 
 
 @app.get("/")
-async def root():
-    """Serve frontend index.html."""
+async def root(username: str = Depends(verify_credentials)):
+    """Serve frontend index.html (認証必須)."""
     return FileResponse(FRONTEND_DIR / "index.html")
 
 

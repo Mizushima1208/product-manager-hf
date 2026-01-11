@@ -2,6 +2,9 @@
 import { api } from './api.js';
 import { showToast, formatDate } from './utils.js';
 
+// デフォルト画像（SVGプレースホルダー）
+const DEFAULT_IMAGE = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'%3E%3Crect fill='%23f0f0f0' width='200' height='200'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%23999' font-size='14'%3ENo Image%3C/text%3E%3C/svg%3E";
+
 // 状態
 let selectedFile = null;
 let selectedEngine = 'gemini-vision'; // デフォルト: Gemini Vision（推奨）
@@ -155,7 +158,7 @@ window.showEquipmentDetail = async function(id) {
         const equipment = await api.get(`/api/equipment/${id}`);
         const modal = document.getElementById('equipment-detail-modal');
 
-        document.getElementById('detail-image').src = equipment.image_path || '/images/equipment/default.jpg';
+        document.getElementById('detail-image').src = equipment.image_path || DEFAULT_IMAGE;
         document.getElementById('detail-name').textContent = equipment.equipment_name || '-';
         document.getElementById('detail-model').textContent = equipment.model_number || '-';
         document.getElementById('detail-serial').textContent = equipment.serial_number || '-';
@@ -630,7 +633,7 @@ async function loadEquipment() {
 }
 
 function renderEquipmentCard(equipment) {
-    const imagePath = equipment.image_path || '/images/equipment/default.jpg';
+    const imagePath = equipment.image_path || DEFAULT_IMAGE;
     const categoryBadge = equipment.tool_category
         ? `<span class="category-badge">${equipment.tool_category}</span>`
         : '';
@@ -641,7 +644,7 @@ function renderEquipmentCard(equipment) {
     return `
         <div class="equipment-card" onclick="showEquipmentDetail(${equipment.id})" style="cursor: pointer;">
             <div class="equipment-image">
-                <img src="${imagePath}" alt="${equipment.equipment_name || ''}" onerror="this.src='/images/equipment/default.jpg'">
+                <img src="${imagePath}" alt="${equipment.equipment_name || ''}" onerror="this.onerror=null; this.src='${DEFAULT_IMAGE}'">
                 ${categoryBadge}
             </div>
             <div class="equipment-info">
