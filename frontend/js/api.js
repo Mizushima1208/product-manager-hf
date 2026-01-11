@@ -1,5 +1,6 @@
 // API Client
-const API_URL = 'http://localhost:8000';
+// 相対パスを使用（本番環境でも動作するように）
+const API_URL = '';
 
 export const api = {
     async get(endpoint) {
