@@ -112,7 +112,7 @@ async function searchManual(searchType, displayName) {
     searchModal.classList.add('visible');
 
     try {
-        const response = await fetch('http://localhost:8000/api/search', {
+        const response = await fetch('/api/search', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ query: query, search_type: searchType })
@@ -184,7 +184,7 @@ async function saveEquipmentNotes() {
     const notes = document.getElementById('detail-notes').value;
 
     try {
-        const response = await fetch(`http://localhost:8000/api/equipment/${currentDetailEquipmentId}`, {
+        const response = await fetch(`/api/equipment/${currentDetailEquipmentId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ notes: notes })
@@ -235,7 +235,7 @@ async function saveEquipmentEdit() {
     };
 
     try {
-        const response = await fetch(`http://localhost:8000/api/equipment/${editingEquipmentId}`, {
+        const response = await fetch(`/api/equipment/${editingEquipmentId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
@@ -359,7 +359,7 @@ async function uploadVisionCredentials(file) {
     formData.append('file', file);
 
     try {
-        const response = await fetch('http://localhost:8000/api/config/vision/credentials', {
+        const response = await fetch('/api/config/vision/credentials', {
             method: 'POST',
             body: formData
         });
@@ -491,7 +491,7 @@ window.processSingleFile = async function(fileId, fileName) {
     const formData = new FormData();
     formData.append('llm_engine', selectedEngine);
     try {
-        const response = await fetch(`http://localhost:8000/api/google-drive/process/${fileId}`, { method: 'POST', body: formData });
+        const response = await fetch(`/api/google-drive/process/${fileId}`, { method: 'POST', body: formData });
         if (response.ok) { showToast(`${fileName} を処理しました`); loadEquipment(); }
         else throw new Error('処理に失敗しました');
     } catch (error) { showToast(`${fileName} の処理に失敗しました`, 'error'); }
@@ -593,7 +593,7 @@ async function uploadEquipment() {
     formData.append('file', selectedFile);
     formData.append('llm_engine', selectedEngine);
     try {
-        const response = await fetch('http://localhost:8000/api/equipment/upload', { method: 'POST', body: formData });
+        const response = await fetch('/api/equipment/upload', { method: 'POST', body: formData });
         if (!response.ok) throw new Error('アップロードに失敗しました');
         showToast('機械を登録しました!');
         loadEquipment();
@@ -663,7 +663,7 @@ function updateEquipmentSummary(equipmentList) {
 
 window.incrementEquipment = async function(id) {
     try {
-        const response = await fetch(`http://localhost:8000/api/equipment/${id}/increment`, { method: 'POST' });
+        const response = await fetch(`/api/equipment/${id}/increment`, { method: 'POST' });
         if (!response.ok) throw new Error('更新失敗');
         const data = await response.json();
         const qtyEl = document.getElementById(`eq-qty-${id}`);
@@ -680,7 +680,7 @@ window.incrementEquipment = async function(id) {
 
 window.decrementEquipment = async function(id) {
     try {
-        const response = await fetch(`http://localhost:8000/api/equipment/${id}/decrement`, { method: 'POST' });
+        const response = await fetch(`/api/equipment/${id}/decrement`, { method: 'POST' });
         if (!response.ok) throw new Error('更新失敗');
         const data = await response.json();
         const qtyEl = document.getElementById(`eq-qty-${id}`);
@@ -722,7 +722,7 @@ window.searchSpecSheet = async function(equipmentId) {
     showToast('仕様書を検索中...');
 
     try {
-        const response = await fetch(`http://localhost:8000/api/equipment/${equipmentId}/spec-search`);
+        const response = await fetch(`/api/equipment/${equipmentId}/spec-search`);
         const data = await response.json();
 
         if (!response.ok) {
@@ -800,7 +800,7 @@ window.deleteEquipment = async function(id) {
 window.enhanceWithAI = async function(id) {
     showToast('AI補完を実行中...');
     try {
-        const response = await fetch(`http://localhost:8000/api/equipment/${id}/enhance`, {
+        const response = await fetch(`/api/equipment/${id}/enhance`, {
             method: 'POST'
         });
         const data = await response.json();
@@ -908,7 +908,7 @@ window.processLocalFile = async function(filename) {
     formData.append('llm_engine', selectedEngine);
 
     try {
-        const response = await fetch('http://localhost:8000/api/local-files/process', {
+        const response = await fetch('/api/local-files/process', {
             method: 'POST',
             body: formData
         });
@@ -1098,8 +1098,8 @@ async function saveSignboard() {
 
     try {
         const url = editingSignboardId
-            ? `http://localhost:8000/api/signboards/${editingSignboardId}`
-            : 'http://localhost:8000/api/signboards';
+            ? `/api/signboards/${editingSignboardId}`
+            : '/api/signboards';
         const method = editingSignboardId ? 'PUT' : 'POST';
 
         const response = await fetch(url, {
@@ -1226,7 +1226,7 @@ window.deleteSignboard = async function(id) {
 
 window.incrementSignboard = async function(id) {
     try {
-        const response = await fetch(`http://localhost:8000/api/signboards/${id}/increment`, { method: 'POST' });
+        const response = await fetch(`/api/signboards/${id}/increment`, { method: 'POST' });
         if (!response.ok) throw new Error('更新失敗');
         const data = await response.json();
         // 数量表示を更新
@@ -1246,7 +1246,7 @@ window.incrementSignboard = async function(id) {
 
 window.decrementSignboard = async function(id) {
     try {
-        const response = await fetch(`http://localhost:8000/api/signboards/${id}/decrement`, { method: 'POST' });
+        const response = await fetch(`/api/signboards/${id}/decrement`, { method: 'POST' });
         if (!response.ok) throw new Error('更新失敗');
         const data = await response.json();
         // 数量表示を更新
@@ -1285,7 +1285,7 @@ window.addSignboardQuantity = async function(id) {
     }
 
     try {
-        const response = await fetch(`http://localhost:8000/api/signboards/${id}/add`, {
+        const response = await fetch(`/api/signboards/${id}/add`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ amount: addValue, reason: reason })
@@ -1328,7 +1328,7 @@ window.subtractSignboardQuantity = async function(id) {
     }
 
     try {
-        const response = await fetch(`http://localhost:8000/api/signboards/${id}/subtract`, {
+        const response = await fetch(`/api/signboards/${id}/subtract`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ amount: subValue, reason: reason })
