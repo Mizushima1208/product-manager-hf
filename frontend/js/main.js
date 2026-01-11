@@ -1167,7 +1167,7 @@ function renderSignboardCard(signboard) {
                 </div>
                 <div class="qty-input-area">
                     <input type="number" class="qty-input-sm" id="qty-input-${signboard.id}" min="1" value="1" placeholder="数量">
-                    <input type="text" class="qty-reason-sm" id="reason-input-${signboard.id}" placeholder="理由">
+                    <input type="text" class="qty-reason-sm" id="reason-input-${signboard.id}" placeholder="理由（必須）" required>
                     <input type="hidden" id="mode-${signboard.id}" value="plus">
                     <button class="qty-register-btn" onclick="registerSignboardQty(${signboard.id})">登録</button>
                 </div>
