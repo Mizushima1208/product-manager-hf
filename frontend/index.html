@@ -32,62 +32,26 @@
         <div class="main-content">
             <div class="card" style="margin-bottom: 24px;">
                 <div class="card-header">
-                    <div class="card-title">📤 銘板写真をアップロード</div>
+                    <div class="card-title">📤 Google ドライブから銘板写真を取込</div>
                 </div>
                 <div class="card-body">
-                    <div class="tabs">
-                        <button class="tab active" data-tab="upload">手動アップロード</button>
-                        <button class="tab" data-tab="local">ローカルフォルダ</button>
-                        <button class="tab" data-tab="gdrive">Google ドライブ</button>
-                    </div>
-                    <div id="upload-tab" class="tab-content active">
-                        <div class="drop-zone" id="drop-zone">
-                            <div class="drop-zone-icon">🏭</div>
-                            <p>機械の銘板写真をドラッグ＆ドロップ<br>または<strong>クリックして選択</strong></p>
-                            <input type="file" id="file-input" accept="image/*">
+                    <div class="drive-section">
+                        <div class="drive-status">
+                            <span class="status-dot" id="drive-status-indicator"></span>
+                            <span id="drive-status-text">状態を確認中...</span>
                         </div>
-                        <button class="btn btn-primary" id="upload-btn" disabled style="margin-top: 16px; width: 100%;">📥 機械を登録</button>
-                    </div>
-                    <div id="local-tab" class="tab-content">
-                        <div class="local-section">
-                            <div class="local-folder-info">
-                                <span>📁 フォルダ: </span><code id="local-folder-path">読み込み中...</code>
-                            </div>
-                            <div class="local-actions">
-                                <button class="btn btn-secondary" id="load-local-files-btn">📂 ファイル読込</button>
-                                <button class="btn btn-primary" id="process-local-all-btn" disabled>⚡ 全て処理</button>
-                            </div>
-                            <div class="local-files" id="local-files" style="display: none;"></div>
-                            <div class="progress-container" id="local-progress-container" style="display: none;">
-                                <div class="progress-header"><span>処理中...</span><span id="local-progress-count">0 / 0</span></div>
-                                <div class="progress-bar-wrapper"><div class="progress-bar" id="local-progress-bar"></div></div>
-                                <div class="progress-info" id="local-current-file-info">
-                                    <span class="spinner-small"></span><span id="local-current-file-name">準備中...</span>
-                                </div>
-                                <div class="progress-errors" id="local-progress-errors" style="display: none;"></div>
-                            </div>
+                        <div class="drive-actions">
+                            <button class="btn btn-secondary" id="load-drive-files-btn">📂 ファイル読込</button>
+                            <button class="btn btn-primary" id="process-all-btn" disabled>⚡ 全て処理</button>
                         </div>
-                    </div>
-                    <div id="gdrive-tab" class="tab-content">
-                        <div class="drive-section">
-                            <div class="drive-status">
-                                <span class="status-dot" id="drive-status-indicator"></span>
-                                <span id="drive-status-text">状態を確認中...</span>
+                        <div class="drive-files" id="drive-files" style="display: none;"></div>
+                        <div class="progress-container" id="progress-container">
+                            <div class="progress-header"><span>処理中...</span><span id="progress-count">0 / 0</span></div>
+                            <div class="progress-bar-wrapper"><div class="progress-bar" id="progress-bar"></div></div>
+                            <div class="progress-info" id="current-file-info">
+                                <span class="spinner-small"></span><span id="current-file-name">準備中...</span>
                             </div>
-                            <div class="drive-actions">
-                                <button class="btn btn-secondary" id="connect-drive-btn">🔗 接続</button>
-                                <button class="btn btn-secondary" id="load-drive-files-btn" disabled>📂 ファイル読込</button>
-                                <button class="btn btn-primary" id="process-all-btn" disabled>⚡ 全て処理</button>
-                            </div>
-                            <div class="drive-files" id="drive-files" style="display: none;"></div>
-                            <div class="progress-container" id="progress-container">
-                                <div class="progress-header"><span>処理中...</span><span id="progress-count">0 / 0</span></div>
-                                <div class="progress-bar-wrapper"><div class="progress-bar" id="progress-bar"></div></div>
-                                <div class="progress-info" id="current-file-info">
-                                    <span class="spinner-small"></span><span id="current-file-name">準備中...</span>
-                                </div>
-                                <div class="progress-errors" id="progress-errors" style="display: none;"></div>
-                            </div>
+                            <div class="progress-errors" id="progress-errors" style="display: none;"></div>
                         </div>
                     </div>
                 </div>
@@ -508,6 +472,6 @@
         </div>
     </div>
 
-    <script type="module" src="js/main.js?v=21"></script>
+    <script type="module" src="js/main.js?v=22"></script>
 </body>
 </html>

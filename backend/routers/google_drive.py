@@ -12,6 +12,12 @@ router = APIRouter(prefix="/api/google-drive", tags=["google-drive"])
 # 工事看板テンプレート画像のフォルダID
 SIGNBOARD_TEMPLATE_FOLDER_ID = "1edOp95pJdcpLrfH9yqAIqlGhE0l73y34"
 
+# 機械銘板画像のフォルダID（複数フォルダ対応）
+EQUIPMENT_IMAGE_FOLDER_IDS = [
+    "1LvO_2p60nOKQvrQP8Apu2-YfQaj2J959",
+    "1njruSQ_bVt6H5H0vWDIiLd2XNxdGJ3PY"
+]
+
 
 @router.get("/status")
 async def get_status():
@@ -255,4 +261,106 @@ async def get_image_thumbnail(file_id: str):
 
         return Response(content=output.getvalue(), media_type='image/jpeg')
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/equipment-images")
+async def list_equipment_images():
+    """List equipment nameplate images from Google Drive folders."""
+    try:
+        service = get_google_drive_service()
+        all_files = []
+
+        for folder_id in EQUIPMENT_IMAGE_FOLDER_IDS:
+            try:
+                results = service.files().list(
+                    q=f"'{folder_id}' in parents and mimeType contains 'image/'",
+                    pageSize=100,
+                    fields="files(id, name, mimeType, createdTime, size)"
+                ).execute()
+                files = results.get('files', [])
+                # サムネイルURLを追加
+                for f in files:
+                    f['thumbnail_url'] = f'/api/google-drive/image/{f["id"]}/thumbnail'
+                    f['image_url'] = f'/api/google-drive/image/{f["id"]}'
+                    f['folder_id'] = folder_id
+                all_files.extend(files)
+            except Exception as e:
+                # フォルダアクセスエラーは無視して続行
+                pass
+
+        return {"files": all_files}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/equipment-images/process-all")
+async def process_all_equipment_images(
+    llm_engine: str = Form(default="gemini-vision")
+):
+    """Process all equipment images from Google Drive folders."""
+    from core import database
+    from googleapiclient.http import MediaIoBaseDownload
+
+    try:
+        service = get_google_drive_service()
+        all_files = []
+
+        # 全フォルダからファイルを収集
+        for folder_id in EQUIPMENT_IMAGE_FOLDER_IDS:
+            try:
+                results = service.files().list(
+                    q=f"'{folder_id}' in parents and mimeType contains 'image/'",
+                    pageSize=100,
+                    fields="files(id, name, mimeType)"
+                ).execute()
+                all_files.extend(results.get('files', []))
+            except Exception:
+                pass
+
+        processed = []
+        errors = []
+
+        # プログレス初期化
+        database.processing_progress = {
+            "status": "processing",
+            "current": 0,
+            "total": len(all_files),
+            "current_file": "",
+            "errors": []
+        }
+
+        for i, file in enumerate(all_files):
+            database.processing_progress["current"] = i + 1
+            database.processing_progress["current_file"] = file['name']
+
+            try:
+                request = service.files().get_media(fileId=file['id'])
+                file_buffer = io.BytesIO()
+                downloader = MediaIoBaseDownload(file_buffer, request)
+
+                done = False
+                while not done:
+                    status, done = downloader.next_chunk()
+
+                image_bytes = file_buffer.getvalue()
+                equipment = await process_image_async(image_bytes, file['name'], llm_engine)
+                processed.append(equipment)
+
+            except Exception as e:
+                error_info = {"file": file['name'], "error": str(e)}
+                errors.append(error_info)
+                database.processing_progress["errors"].append(error_info)
+
+        database.processing_progress["status"] = "complete"
+        database.processing_progress["current_file"] = ""
+
+        return {
+            "success": True,
+            "processed_count": len(processed),
+            "equipment": processed,
+            "errors": errors
+        }
+    except Exception as e:
+        database.processing_progress["status"] = "error"
         raise HTTPException(status_code=500, detail=str(e))

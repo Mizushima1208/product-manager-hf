@@ -22,16 +22,13 @@ document.addEventListener('DOMContentLoaded', () => {
     loadEngines();
     loadEquipment();
     loadConfig();
-    setupDropZone();
     setupEventListeners();
-    setupTabs();
     setupModal();
     setupEditModal();
     setupDetailModal();
     setupPageNavigation();
     setupSignboardModal();
     checkDriveStatus();
-    loadLocalFolderInfo();
     loadVisionConfig();
     setupVisionCredentials();
 });
@@ -408,31 +405,35 @@ async function loadEngines() {
 
 // Google ドライブ
 async function checkDriveStatus() {
-    try {
-        const data = await api.get('/api/google-drive/status');
-        const indicator = document.getElementById('drive-status-indicator');
-        const statusText = document.getElementById('drive-status-text');
-        const modalDot = document.getElementById('modal-status-dot');
-        const modalText = document.getElementById('modal-status-text');
+    const indicator = document.getElementById('drive-status-indicator');
+    const statusText = document.getElementById('drive-status-text');
+    const modalDot = document.getElementById('modal-status-dot');
+    const modalText = document.getElementById('modal-status-text');
+    const loadBtn = document.getElementById('load-drive-files-btn');
+    const processBtn = document.getElementById('process-all-btn');
 
-        if (data.connected) {
+    try {
+        // 実際にファイル一覧を取得して接続確認
+        const data = await api.get('/api/google-drive/equipment-images');
+        const connected = data.files !== undefined;
+
+        if (connected) {
             if (indicator) indicator.classList.add('connected');
-            if (statusText) statusText.textContent = 'Google ドライブに接続済み';
+            if (statusText) statusText.textContent = `Google ドライブ接続済み（${data.files.length}件のファイル）`;
             if (modalDot) modalDot.classList.add('connected');
             if (modalText) modalText.textContent = '接続済み';
             driveConnected = true;
-            document.getElementById('load-drive-files-btn').disabled = false;
-            document.getElementById('process-all-btn').disabled = false;
-        } else {
-            if (indicator) indicator.classList.remove('connected');
-            if (statusText) statusText.textContent = data.message || '未接続';
-            if (modalDot) modalDot.classList.remove('connected');
-            if (modalText) modalText.textContent = data.message || '未接続';
-            driveConnected = false;
+            if (loadBtn) loadBtn.disabled = false;
+            if (processBtn) processBtn.disabled = false;
         }
     } catch (error) {
-        const statusText = document.getElementById('drive-status-text');
-        if (statusText) statusText.textContent = 'サーバーに接続できません';
+        if (indicator) indicator.classList.remove('connected');
+        if (statusText) statusText.textContent = 'Google ドライブ未接続（設定を確認してください）';
+        if (modalDot) modalDot.classList.remove('connected');
+        if (modalText) modalText.textContent = '未接続';
+        driveConnected = false;
+        if (loadBtn) loadBtn.disabled = true;
+        if (processBtn) processBtn.disabled = true;
     }
 }
 
@@ -472,17 +473,19 @@ async function loadDriveFiles() {
     container.style.display = 'block';
     container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
     try {
-        const data = await api.get('/api/google-drive/files');
+        const data = await api.get('/api/google-drive/equipment-images');
         if (data.files.length === 0) {
-            container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 20px;">画像ファイルが見つかりません</p>';
+            container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 20px;">画像ファイルが見つかりません<br><small>Google Driveフォルダを確認してください</small></p>';
             return;
         }
         container.innerHTML = data.files.map(file => `
             <div class="drive-file">
-                <span class="drive-file-name">📄 ${file.name}</span>
-                <button class="btn btn-primary btn-sm" onclick="processSingleFile('${file.id}', '${file.name.replace(/'/g, "\'")}')">処理</button>
+                <img src="${file.thumbnail_url}" alt="" style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px; margin-right: 8px;">
+                <span class="drive-file-name">${file.name}</span>
+                <button class="btn btn-primary btn-sm" onclick="processSingleFile('${file.id}', '${file.name.replace(/'/g, "\\'")}')">処理</button>
             </div>
         `).join('');
+        showToast(`${data.files.length}件のファイルを読み込みました`);
     } catch (error) { container.innerHTML = '<p style="color: var(--danger); text-align: center; padding: 20px;">ファイルの読み込みに失敗しました</p>'; }
 }
 
@@ -549,14 +552,14 @@ async function processAllDriveFiles() {
     formData.append('llm_engine', selectedEngine);
 
     try {
-        const data = await api.post('/api/google-drive/process', formData);
+        const data = await api.post('/api/google-drive/equipment-images/process-all', formData);
         await pollProgress();
         if (data.success) { showToast(`${data.processed_count}件の機械を処理しました`); loadEquipment(); }
     } catch (error) { showToast('処理に失敗しました', 'error'); }
     finally {
         if (progressInterval) { clearInterval(progressInterval); progressInterval = null; }
         btn.disabled = false;
-        btn.innerHTML = '全て処理';
+        btn.innerHTML = '⚡ 全て処理';
         setTimeout(() => progressContainer.classList.remove('visible'), 3000);
     }
 }
@@ -828,15 +831,11 @@ async function clearAllEquipment() {
 
 // イベントリスナー
 function setupEventListeners() {
-    document.getElementById('upload-btn').addEventListener('click', uploadEquipment);
     document.getElementById('refresh-btn').addEventListener('click', loadEquipment);
     document.getElementById('clear-all-btn').addEventListener('click', clearAllEquipment);
-    document.getElementById('connect-drive-btn').addEventListener('click', connectGoogleDrive);
     document.getElementById('load-drive-files-btn').addEventListener('click', loadDriveFiles);
     document.getElementById('process-all-btn').addEventListener('click', processAllDriveFiles);
     document.getElementById('save-folder-btn').addEventListener('click', saveFolderId);
-    document.getElementById('load-local-files-btn').addEventListener('click', loadLocalFiles);
-    document.getElementById('process-local-all-btn').addEventListener('click', processAllLocalFiles);
 
     // 設定モーダル内の接続ボタン
     const settingsConnectBtn = document.getElementById('settings-connect-drive-btn');
