@@ -1,0 +1,178 @@
+"""Google Drive integration endpoints."""
+import io
+from fastapi import APIRouter, Form, HTTPException
+from services.google_drive import get_google_drive_service
+from services.equipment_parser import process_image_async
+from core.config import get_folder_id, CREDENTIALS_FILE, TOKEN_FILE
+from core.database import processing_progress
+import os
+
+router = APIRouter(prefix="/api/google-drive", tags=["google-drive"])
+
+
+@router.get("/status")
+async def get_status():
+    """Check Google Drive connection status."""
+    folder_id = get_folder_id()
+    try:
+        if not os.path.exists(CREDENTIALS_FILE):
+            return {
+                "connected": False,
+                "message": "credentials.json not found. Please upload credentials.",
+                "folder_id": folder_id,
+                "has_credentials": False
+            }
+
+        if os.path.exists(TOKEN_FILE):
+            return {
+                "connected": True,
+                "message": "Google Drive connected",
+                "folder_id": folder_id,
+                "has_credentials": True
+            }
+
+        return {
+            "connected": False,
+            "message": "Not authenticated. Click 'Connect Google Drive' to authenticate.",
+            "folder_id": folder_id,
+            "has_credentials": True
+        }
+    except Exception as e:
+        return {
+            "connected": False,
+            "message": str(e),
+            "folder_id": folder_id,
+            "has_credentials": os.path.exists(CREDENTIALS_FILE)
+        }
+
+
+@router.post("/connect")
+async def connect():
+    """Initiate Google Drive authentication."""
+    folder_id = get_folder_id()
+    try:
+        service = get_google_drive_service()
+        results = service.files().list(
+            q=f"'{folder_id}' in parents and mimeType contains 'image/'",
+            pageSize=1,
+            fields="files(id, name)"
+        ).execute()
+        return {"success": True, "message": "Google Drive connected successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/files")
+async def list_files():
+    """List image files in the configured folder."""
+    folder_id = get_folder_id()
+    try:
+        service = get_google_drive_service()
+        results = service.files().list(
+            q=f"'{folder_id}' in parents and (mimeType contains 'image/' or mimeType = 'application/pdf')",
+            pageSize=100,
+            fields="files(id, name, mimeType, createdTime, size)"
+        ).execute()
+        return {"files": results.get('files', [])}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/progress")
+async def get_progress():
+    """Get current processing progress."""
+    return processing_progress
+
+
+@router.post("/process")
+async def process_all_files(
+    llm_engine: str = Form(default="gemini-vision")
+):
+    """Process all image files from Google Drive folder."""
+    from core import database
+    folder_id = get_folder_id()
+
+    try:
+        service = get_google_drive_service()
+        results = service.files().list(
+            q=f"'{folder_id}' in parents and mimeType contains 'image/'",
+            pageSize=100,
+            fields="files(id, name, mimeType)"
+        ).execute()
+
+        files = results.get('files', [])
+        processed = []
+        errors = []
+
+        # Initialize progress
+        database.processing_progress = {
+            "status": "processing",
+            "current": 0,
+            "total": len(files),
+            "current_file": "",
+            "errors": []
+        }
+
+        for i, file in enumerate(files):
+            database.processing_progress["current"] = i + 1
+            database.processing_progress["current_file"] = file['name']
+
+            try:
+                from googleapiclient.http import MediaIoBaseDownload
+                request = service.files().get_media(fileId=file['id'])
+                file_buffer = io.BytesIO()
+                downloader = MediaIoBaseDownload(file_buffer, request)
+
+                done = False
+                while not done:
+                    status, done = downloader.next_chunk()
+
+                image_bytes = file_buffer.getvalue()
+                equipment = await process_image_async(image_bytes, file['name'], llm_engine)
+                processed.append(equipment)
+
+            except Exception as e:
+                error_info = {"file": file['name'], "error": str(e)}
+                errors.append(error_info)
+                database.processing_progress["errors"].append(error_info)
+
+        database.processing_progress["status"] = "complete"
+        database.processing_progress["current_file"] = ""
+
+        return {
+            "success": True,
+            "processed_count": len(processed),
+            "equipment": processed,
+            "errors": errors
+        }
+    except Exception as e:
+        database.processing_progress["status"] = "error"
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/process/{file_id}")
+async def process_single_file(
+    file_id: str,
+    llm_engine: str = Form(default="gemini-vision")
+):
+    """Process a single file from Google Drive."""
+    try:
+        service = get_google_drive_service()
+        from googleapiclient.http import MediaIoBaseDownload
+
+        file_metadata = service.files().get(fileId=file_id, fields="name, mimeType").execute()
+
+        request = service.files().get_media(fileId=file_id)
+        file_buffer = io.BytesIO()
+        downloader = MediaIoBaseDownload(file_buffer, request)
+
+        done = False
+        while not done:
+            status, done = downloader.next_chunk()
+
+        image_bytes = file_buffer.getvalue()
+        equipment = await process_image_async(image_bytes, file_metadata['name'], llm_engine)
+
+        return {"success": True, "equipment": equipment}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

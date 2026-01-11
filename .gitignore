@@ -1,0 +1,19 @@
+# Credentials
+data/credentials.json
+data/token.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Database (optional - remove if you want to keep initial data)
+# backend/data/*.db
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,16 @@
+fastapi
+uvicorn
+python-multipart
+pytesseract
+Pillow
+openpyxl
+pydantic
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
+google-cloud-vision
+duckduckgo_search
+paddlepaddle
+paddleocr
+httpx
+tavily-python

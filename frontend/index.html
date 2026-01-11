@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>機械台帳</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;600;700&family=Noto+Serif+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css?v=10">
+</head>
+<body>
+    <div class="washi-overlay"></div>
+    <div class="sakura-deco top-right"></div>
+    <div class="wave-deco bottom-left"></div>
+
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">
+                <div class="logo-icon">機</div>
+                <div class="logo-text">機械<span>台帳</span></div>
+            </div>
+            <nav class="main-nav">
+                <a href="#" class="nav-link active" data-page="equipment">機械管理</a>
+                <a href="#" class="nav-link" data-page="signboards">工事看板</a>
+            </nav>
+            <button class="btn btn-ghost btn-icon" id="settings-btn" title="設定">⚙️</button>
+        </div>
+    </header>
+
+    <!-- 機械管理ページ -->
+    <div id="equipment-page" class="page-content active">
+    <div class="main-container">
+        <div class="main-content">
+            <div class="card" style="margin-bottom: 24px;">
+                <div class="card-header">
+                    <div class="card-title">📤 銘板写真をアップロード</div>
+                </div>
+                <div class="card-body">
+                    <div class="tabs">
+                        <button class="tab active" data-tab="upload">手動アップロード</button>
+                        <button class="tab" data-tab="local">ローカルフォルダ</button>
+                        <button class="tab" data-tab="gdrive">Google ドライブ</button>
+                    </div>
+                    <div id="upload-tab" class="tab-content active">
+                        <div class="drop-zone" id="drop-zone">
+                            <div class="drop-zone-icon">🏭</div>
+                            <p>機械の銘板写真をドラッグ＆ドロップ<br>または<strong>クリックして選択</strong></p>
+                            <input type="file" id="file-input" accept="image/*">
+                        </div>
+                        <button class="btn btn-primary" id="upload-btn" disabled style="margin-top: 16px; width: 100%;">📥 機械を登録</button>
+                    </div>
+                    <div id="local-tab" class="tab-content">
+                        <div class="local-section">
+                            <div class="local-folder-info">
+                                <span>📁 フォルダ: </span><code id="local-folder-path">読み込み中...</code>
+                            </div>
+                            <div class="local-actions">
+                                <button class="btn btn-secondary" id="load-local-files-btn">📂 ファイル読込</button>
+                                <button class="btn btn-primary" id="process-local-all-btn" disabled>⚡ 全て処理</button>
+                            </div>
+                            <div class="local-files" id="local-files" style="display: none;"></div>
+                            <div class="progress-container" id="local-progress-container" style="display: none;">
+                                <div class="progress-header"><span>処理中...</span><span id="local-progress-count">0 / 0</span></div>
+                                <div class="progress-bar-wrapper"><div class="progress-bar" id="local-progress-bar"></div></div>
+                                <div class="progress-info" id="local-current-file-info">
+                                    <span class="spinner-small"></span><span id="local-current-file-name">準備中...</span>
+                                </div>
+                                <div class="progress-errors" id="local-progress-errors" style="display: none;"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="gdrive-tab" class="tab-content">
+                        <div class="drive-section">
+                            <div class="drive-status">
+                                <span class="status-dot" id="drive-status-indicator"></span>
+                                <span id="drive-status-text">状態を確認中...</span>
+                            </div>
+                            <div class="drive-actions">
+                                <button class="btn btn-secondary" id="connect-drive-btn">🔗 接続</button>
+                                <button class="btn btn-secondary" id="load-drive-files-btn" disabled>📂 ファイル読込</button>
+                                <button class="btn btn-primary" id="process-all-btn" disabled>⚡ 全て処理</button>
+                            </div>
+                            <div class="drive-files" id="drive-files" style="display: none;"></div>
+                            <div class="progress-container" id="progress-container">
+                                <div class="progress-header"><span>処理中...</span><span id="progress-count">0 / 0</span></div>
+                                <div class="progress-bar-wrapper"><div class="progress-bar" id="progress-bar"></div></div>
+                                <div class="progress-info" id="current-file-info">
+                                    <span class="spinner-small"></span><span id="current-file-name">準備中...</span>
+                                </div>
+                                <div class="progress-errors" id="progress-errors" style="display: none;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">📋 機械一覧</div>
+                    <button class="btn btn-ghost btn-sm" id="refresh-btn">🔄 更新</button>
+                </div>
+                <div class="card-body">
+                    <div id="equipment-list"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="sidebar">
+            <div class="card">
+                <div class="card-body">
+                    <div class="stat-card">
+                        <div class="stat-icon">📊</div>
+                        <div class="stat-info">
+                            <h3 id="equipment-count">0</h3>
+                            <p>登録機械数</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-header"><div class="card-title">クイック操作</div></div>
+                <div class="card-body">
+                    <div class="quick-actions">
+                        <button class="quick-action-btn danger" id="clear-all-btn">🗑️ 全データを削除</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
+
+    <!-- 工事看板管理ページ -->
+    <div id="signboards-page" class="page-content">
+    <div class="main-container">
+        <div class="main-content">
+            <div class="card" style="margin-bottom: 24px;">
+                <div class="card-header">
+                    <div class="card-title">📋 工事看板一覧</div>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-primary btn-sm" id="add-signboard-btn">➕ 新規登録</button>
+                        <button class="btn btn-ghost btn-sm" id="refresh-signboards-btn">🔄 更新</button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="signboards-list"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="sidebar">
+            <div class="card">
+                <div class="card-body">
+                    <div class="stat-card">
+                        <div class="stat-icon">🪧</div>
+                        <div class="stat-info">
+                            <h3 id="signboards-count">0</h3>
+                            <p>登録看板数</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-header"><div class="card-title">在庫サマリー</div></div>
+                <div class="card-body">
+                    <div id="signboards-summary">
+                        <div class="summary-item">
+                            <span class="summary-label">在庫あり</span>
+                            <span class="summary-value" id="summary-instock">0</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">使用中</span>
+                            <span class="summary-value" id="summary-inuse">0</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">修理中</span>
+                            <span class="summary-value" id="summary-repair">0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-header"><div class="card-title">クイック操作</div></div>
+                <div class="card-body">
+                    <div class="quick-actions">
+                        <button class="quick-action-btn danger" id="clear-all-signboards-btn">🗑️ 全データを削除</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
+
+    <!-- 工事看板 新規登録/編集モーダル -->
+    <div class="modal-overlay" id="signboard-modal">
+        <div class="modal" style="max-width: 500px;">
+            <div class="modal-header">
+                <div class="modal-title" id="signboard-modal-title">🪧 工事看板登録</div>
+                <button class="modal-close" id="close-signboard-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-section">
+                    <div class="form-group">
+                        <label class="form-label">看板記載内容 <span style="color: var(--danger);">*</span></label>
+                        <input type="text" class="form-input" id="signboard-comment" placeholder="例: 作業中・立入禁止">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">説明・備考</label>
+                        <textarea class="form-input" id="signboard-description" rows="2" placeholder="例: 赤文字の大きい看板"></textarea>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">サイズ</label>
+                            <input type="text" class="form-input" id="signboard-size" placeholder="例: A3, 600x900mm">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">数量</label>
+                            <input type="number" class="form-input" id="signboard-quantity" value="1" min="0">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">保管場所</label>
+                            <input type="text" class="form-input" id="signboard-location" placeholder="例: 倉庫A棚3段目">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">状態</label>
+                            <select class="form-input" id="signboard-status">
+                                <option value="在庫あり">在庫あり</option>
+                                <option value="使用中">使用中</option>
+                                <option value="修理中">修理中</option>
+                                <option value="廃棄予定">廃棄予定</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">メモ</label>
+                        <textarea class="form-input" id="signboard-notes" rows="2" placeholder="自由記入"></textarea>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn btn-secondary" id="cancel-signboard-btn">キャンセル</button>
+                    <button class="btn btn-primary" id="save-signboard-btn">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="settings-modal">
+        <div class="modal" style="max-width: 600px;">
+            <div class="modal-header">
+                <div class="modal-title">⚙️ 設定</div>
+                <button class="modal-close" id="close-settings">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- 処理エンジン設定 -->
+                <div class="settings-section">
+                    <div class="settings-section-header" data-section="engine">
+                        <span>🔍 処理エンジン</span>
+                        <span class="settings-toggle">▼</span>
+                    </div>
+                    <div class="settings-section-content" id="engine-section">
+                        <div class="engine-selector" id="engine-selector"></div>
+                    </div>
+                </div>
+
+                <!-- Google ドライブ設定 -->
+                <div class="settings-section">
+                    <div class="settings-section-header" data-section="gdrive">
+                        <span>☁️ Google ドライブ接続</span>
+                        <span class="settings-toggle">▼</span>
+                    </div>
+                    <div class="settings-section-content" id="gdrive-section">
+                        <div class="settings-status-bar">
+                            <span class="status-dot" id="modal-status-dot"></span>
+                            <span id="modal-status-text">確認中...</span>
+                        </div>
+
+                        <div class="settings-instructions">
+                            <div class="instructions-title">📋 接続手順</div>
+                            <ol class="instructions-list">
+                                <li><a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a> でプロジェクトを作成</li>
+                                <li><a href="https://console.cloud.google.com/apis/library/drive.googleapis.com" target="_blank">Google Drive API</a> を有効化</li>
+                                <li><a href="https://console.cloud.google.com/apis/credentials/consent" target="_blank">OAuth同意画面</a> を設定（外部→テストユーザーに自分を追加）</li>
+                                <li><a href="https://console.cloud.google.com/apis/credentials" target="_blank">認証情報</a> → OAuthクライアントID（デスクトップアプリ）を作成</li>
+                                <li>JSONをダウンロードして下にアップロード</li>
+                                <li>「接続」ボタンでGoogleアカウントにログイン</li>
+                            </ol>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">API認証情報 (credentials.json)</label>
+                            <div class="credentials-drop" id="credentials-upload">
+                                <input type="file" id="credentials-input" accept=".json">
+                                <div class="credentials-drop-icon">📁</div>
+                                <p id="credentials-status">クリックして credentials.json をアップロード</p>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">フォルダURL または ID</label>
+                            <input type="text" class="form-input" id="folder-id-input" placeholder="https://drive.google.com/drive/folders/xxxxx">
+                            <p class="form-hint">現在: <span id="current-folder-id">未設定</span></p>
+                        </div>
+
+                        <div class="settings-buttons">
+                            <button class="btn btn-secondary" id="save-folder-btn">💾 フォルダ保存</button>
+                            <button class="btn btn-primary" id="settings-connect-drive-btn">🔗 接続</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Google Vision API設定 -->
+                <div class="settings-section">
+                    <div class="settings-section-header" data-section="vision">
+                        <span>👁️ Google Vision API (高精度OCR)</span>
+                        <span class="settings-toggle">▼</span>
+                    </div>
+                    <div class="settings-section-content" id="vision-section">
+                        <div class="settings-status-bar">
+                            <span class="status-dot" id="vision-status-dot"></span>
+                            <span id="vision-status-text">確認中...</span>
+                        </div>
+
+                        <div id="vision-account-info" style="display: none; margin-bottom: 16px;">
+                            <div class="detail-item" style="margin-bottom: 8px;">
+                                <div class="detail-label">紐づけアカウント</div>
+                                <div class="detail-value" id="vision-client-email">-</div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">プロジェクトID</div>
+                                <div class="detail-value" id="vision-project-id">-</div>
+                            </div>
+                        </div>
+
+                        <div class="settings-instructions">
+                            <div class="instructions-title">📋 設定手順</div>
+                            <ol class="instructions-list">
+                                <li><a href="https://console.cloud.google.com/apis/library/vision.googleapis.com" target="_blank">Cloud Vision API</a> を有効化</li>
+                                <li><a href="https://console.cloud.google.com/iam-admin/serviceaccounts" target="_blank">サービスアカウント</a> を作成</li>
+                                <li>キーを作成 → JSON形式でダウンロード</li>
+                                <li>下にアップロード</li>
+                            </ol>
+                            <p class="instructions-note">※ 料金: 1,000枚まで無料、以降 $1.50/1,000枚</p>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">サービスアカウントキー (JSON)</label>
+                            <div class="credentials-drop" id="vision-credentials-upload">
+                                <input type="file" id="vision-credentials-input" accept=".json">
+                                <div class="credentials-drop-icon">🔑</div>
+                                <p id="vision-credentials-status">クリックしてサービスアカウントキーをアップロード</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 編集モーダル -->
+    <div class="modal-overlay" id="edit-modal">
+        <div class="modal" style="max-width: 500px;">
+            <div class="modal-header">
+                <div class="modal-title">✏️ 機械情報編集</div>
+                <button class="modal-close" id="close-edit-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-section">
+                    <div class="form-group">
+                        <label class="form-label">製品名</label>
+                        <input type="text" class="form-input" id="edit-equipment-name" placeholder="例: プレートコンパクター">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">型番</label>
+                            <input type="text" class="form-input" id="edit-model-number" placeholder="例: MVC-F60">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">シリアル番号</label>
+                            <input type="text" class="form-input" id="edit-serial-number" placeholder="例: W 5290">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">購入日</label>
+                            <input type="date" class="form-input" id="edit-purchase-date">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">工具種別</label>
+                            <select class="form-input" id="edit-tool-category">
+                                <option value="">選択してください</option>
+                                <option value="プレートコンパクター">プレートコンパクター</option>
+                                <option value="ランマー">ランマー</option>
+                                <option value="バイブレーター">バイブレーター</option>
+                                <option value="発電機">発電機</option>
+                                <option value="溶接機">溶接機</option>
+                                <option value="コンプレッサー">コンプレッサー</option>
+                                <option value="ブレーカー">ブレーカー</option>
+                                <option value="ドリル">ドリル</option>
+                                <option value="カッター">カッター</option>
+                                <option value="ポンプ">ポンプ</option>
+                                <option value="チェーンソー">チェーンソー</option>
+                                <option value="草刈機">草刈機</option>
+                                <option value="その他">その他</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">メーカー</label>
+                        <input type="text" class="form-input" id="edit-manufacturer" placeholder="例: 三笠産業">
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn btn-secondary" id="cancel-edit-btn">キャンセル</button>
+                    <button class="btn btn-primary" id="save-edit-btn">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 機械詳細モーダル -->
+    <div class="modal-overlay" id="equipment-detail-modal">
+        <div class="modal" style="max-width: 600px;">
+            <div class="modal-header">
+                <div class="modal-title">🏭 機械詳細</div>
+                <button class="modal-close" id="close-detail-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="detail-content">
+                    <div class="detail-image">
+                        <img id="detail-image" src="" alt="機械画像" onerror="this.src='/images/equipment/default.jpg'">
+                    </div>
+                    <div class="detail-info">
+                        <div class="detail-item">
+                            <div class="detail-label">製品名</div>
+                            <div class="detail-value" id="detail-name">-</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">型番</div>
+                            <div class="detail-value" id="detail-model">-</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">シリアル番号</div>
+                            <div class="detail-value" id="detail-serial">-</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">メーカー</div>
+                            <div class="detail-value" id="detail-manufacturer">-</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">工具種別</div>
+                            <div class="detail-value" id="detail-category">-</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">購入日</div>
+                            <div class="detail-value" id="detail-purchase-date">-</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group" style="margin-top: 20px;">
+                    <label class="form-label">📝 メモ</label>
+                    <textarea class="form-input" id="detail-notes" rows="4" placeholder="この機械に関するメモを入力..."></textarea>
+                </div>
+                <div class="search-manual-section">
+                    <button class="btn btn-search" id="search-spec-btn">📋 仕様書を検索</button>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn btn-secondary" id="detail-edit-btn">✏️ 編集</button>
+                    <button class="btn btn-danger" id="detail-delete-btn">🗑️ 削除</button>
+                    <button class="btn btn-primary" id="detail-save-notes-btn">💾 メモを保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 検索結果モーダル -->
+    <div class="modal-overlay" id="search-results-modal">
+        <div class="modal" style="max-width: 800px;">
+            <div class="modal-header">
+                <div class="modal-title" id="search-results-title">📚 検索結果</div>
+                <button class="modal-close" id="close-search-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="search-query-info" id="search-query-info"></div>
+                <div class="search-results-list" id="search-results-list">
+                    <div class="search-loading">
+                        <div class="spinner"></div>
+                        <p>検索中...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="js/main.js?v=21"></script>
+</body>
+</html>
