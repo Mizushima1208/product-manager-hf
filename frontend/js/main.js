@@ -1351,6 +1351,13 @@ window.setSignboardMode = function(id, mode) {
     if (card) {
         card.querySelectorAll('.qty-btn-v').forEach(btn => btn.classList.remove('active'));
         card.querySelector(`.qty-btn-v.${mode}`).classList.add('active');
+
+        // 入力エリアの色を変更
+        const inputArea = card.querySelector('.qty-input-area');
+        if (inputArea) {
+            inputArea.classList.remove('mode-plus', 'mode-minus');
+            inputArea.classList.add(`mode-${mode}`);
+        }
     }
 };
 

@@ -1182,6 +1182,35 @@ textarea.form-input {
     background: var(--accent-hover);
 }
 
+/* モード別入力欄の色 */
+.qty-input-area.mode-plus .qty-input-sm,
+.qty-input-area.mode-plus .qty-reason-sm {
+    border-color: #059669;
+    background: rgba(5, 150, 105, 0.05);
+}
+
+.qty-input-area.mode-plus .qty-register-btn {
+    background: #059669;
+}
+
+.qty-input-area.mode-plus .qty-register-btn:hover {
+    background: #047857;
+}
+
+.qty-input-area.mode-minus .qty-input-sm,
+.qty-input-area.mode-minus .qty-reason-sm {
+    border-color: #dc2626;
+    background: rgba(220, 38, 38, 0.05);
+}
+
+.qty-input-area.mode-minus .qty-register-btn {
+    background: #dc2626;
+}
+
+.qty-input-area.mode-minus .qty-register-btn:hover {
+    background: #b91c1c;
+}
+
 .qty-btn {
     width: 40px;
     height: 40px;
