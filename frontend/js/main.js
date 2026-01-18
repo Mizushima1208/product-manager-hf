@@ -16,6 +16,8 @@ let localFiles = [];
 let editingSignboardId = null;
 let currentPage = 'equipment';
 let currentDetailEquipmentId = null;
+let equipmentSortBy = 'created_at';
+let equipmentSortOrder = 'desc';
 
 // 初期化
 document.addEventListener('DOMContentLoaded', async () => {
@@ -1024,9 +1026,16 @@ async function loadEquipment() {
     const container = document.getElementById('equipment-list');
     container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
     try {
-        const data = await api.get('/api/equipment');
+        const data = await api.get(`/api/equipment?sort_by=${equipmentSortBy}&sort_order=${equipmentSortOrder}`);
         document.getElementById('equipment-count').textContent = data.equipment.length;
         updateEquipmentSummary(data.equipment);
+
+        // Update sort selector if exists
+        const sortSelect = document.getElementById('equipment-sort-select');
+        if (sortSelect) {
+            sortSelect.value = `${equipmentSortBy}-${equipmentSortOrder}`;
+        }
+
         if (data.equipment.length === 0) {
             container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🏭</div><p>機械が登録されていません</p></div>`;
             return;
@@ -1335,6 +1344,17 @@ function setupEventListeners() {
     document.getElementById('clear-all-btn').addEventListener('click', clearAllEquipment);
     document.getElementById('load-drive-files-btn').addEventListener('click', loadDriveFiles);
     document.getElementById('process-all-btn').addEventListener('click', processAllDriveFiles);
+
+    // ソート選択
+    const sortSelect = document.getElementById('equipment-sort-select');
+    if (sortSelect) {
+        sortSelect.addEventListener('change', (e) => {
+            const [sortBy, sortOrder] = e.target.value.split('-');
+            equipmentSortBy = sortBy;
+            equipmentSortOrder = sortOrder;
+            loadEquipment();
+        });
+    }
 
     // APIテストボタン
     const testApiBtn = document.getElementById('test-api-btn');

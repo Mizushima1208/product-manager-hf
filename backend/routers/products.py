@@ -26,79 +26,108 @@ async def search_product_image(equipment_name: str, model_number: str = None, ma
     Returns the local path of the downloaded image, or None if not found.
     """
     from duckduckgo_search import DDGS
+    import hashlib
+    import time
 
-    # Build search query
-    query_parts = []
+    # Build multiple search queries to try
+    search_queries = []
+
+    # Query 1: Model + Manufacturer (most specific)
+    if model_number and model_number != "不明" and manufacturer and manufacturer != "不明":
+        search_queries.append(f"{manufacturer} {model_number}")
+
+    # Query 2: Equipment name + Model
+    if equipment_name and equipment_name != "不明" and model_number and model_number != "不明":
+        search_queries.append(f"{equipment_name} {model_number}")
+
+    # Query 3: Equipment name + Manufacturer
+    if equipment_name and equipment_name != "不明" and manufacturer and manufacturer != "不明":
+        search_queries.append(f"{manufacturer} {equipment_name}")
+
+    # Query 4: Just equipment name
     if equipment_name and equipment_name != "不明":
-        query_parts.append(equipment_name)
-    if model_number and model_number != "不明":
-        query_parts.append(model_number)
-    if manufacturer and manufacturer != "不明":
-        query_parts.append(manufacturer)
+        search_queries.append(f"{equipment_name} 製品")
 
-    if not query_parts:
+    if not search_queries:
         return None
 
-    query = " ".join(query_parts) + " 製品 画像"
+    # Create folder if needed
+    PRODUCT_IMAGES_PATH.mkdir(parents=True, exist_ok=True)
 
-    try:
-        with DDGS() as ddgs:
-            # Search for images
-            results = list(ddgs.images(query, max_results=5))
+    for query in search_queries:
+        try:
+            print(f"Searching images for: {query}")
+            with DDGS() as ddgs:
+                # Search for images
+                results = list(ddgs.images(query, max_results=5))
 
-            if not results:
-                return None
-
-            # Try to download the first valid image
-            for result in results:
-                image_url = result.get("image")
-                if not image_url:
+                if not results:
+                    print(f"No results for: {query}")
                     continue
 
-                try:
-                    # Download image
-                    async with httpx.AsyncClient(timeout=10.0) as client:
-                        response = await client.get(image_url, follow_redirects=True)
-                        if response.status_code == 200:
-                            content_type = response.headers.get("content-type", "")
-                            if "image" in content_type:
-                                # Determine extension
-                                if "jpeg" in content_type or "jpg" in content_type:
-                                    ext = ".jpg"
-                                elif "png" in content_type:
-                                    ext = ".png"
-                                elif "gif" in content_type:
-                                    ext = ".gif"
-                                elif "webp" in content_type:
-                                    ext = ".webp"
-                                else:
-                                    ext = ".jpg"
+                # Try to download images
+                for result in results:
+                    image_url = result.get("image")
+                    if not image_url:
+                        continue
 
-                                # Create folder if needed
-                                PRODUCT_IMAGES_PATH.mkdir(parents=True, exist_ok=True)
+                    # Skip data URLs and very long URLs
+                    if image_url.startswith("data:") or len(image_url) > 500:
+                        continue
 
-                                # Generate unique filename
-                                import hashlib
-                                import time
-                                hash_str = hashlib.md5(f"{query}{time.time()}".encode()).hexdigest()[:8]
-                                safe_name = "".join(c for c in query_parts[0][:20] if c.isalnum() or c in "- _")
-                                filename = f"{safe_name}_{hash_str}{ext}"
-                                filepath = PRODUCT_IMAGES_PATH / filename
+                    try:
+                        # Download image with headers to avoid blocking
+                        headers = {
+                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                        }
+                        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+                            response = await client.get(image_url, headers=headers)
+                            if response.status_code == 200:
+                                content_type = response.headers.get("content-type", "")
+                                content_length = len(response.content)
 
-                                # Save image
-                                with open(filepath, "wb") as f:
-                                    f.write(response.content)
+                                # Check if it's actually an image and has reasonable size
+                                if "image" in content_type and content_length > 1000:
+                                    # Determine extension
+                                    if "jpeg" in content_type or "jpg" in content_type:
+                                        ext = ".jpg"
+                                    elif "png" in content_type:
+                                        ext = ".png"
+                                    elif "gif" in content_type:
+                                        ext = ".gif"
+                                    elif "webp" in content_type:
+                                        ext = ".webp"
+                                    else:
+                                        ext = ".jpg"
 
-                                # Return relative path for web access
-                                return f"/data/product-images/{filename}"
-                except Exception as e:
-                    print(f"Failed to download image from {image_url}: {e}")
-                    continue
+                                    # Generate unique filename
+                                    hash_str = hashlib.md5(f"{query}{time.time()}".encode()).hexdigest()[:8]
+                                    safe_name = "".join(c for c in (equipment_name or "img")[:15] if c.isalnum() or c in "- _")
+                                    if not safe_name:
+                                        safe_name = "product"
+                                    filename = f"{safe_name}_{hash_str}{ext}"
+                                    filepath = PRODUCT_IMAGES_PATH / filename
 
-            return None
-    except Exception as e:
-        print(f"Image search error: {e}")
-        return None
+                                    # Save image
+                                    with open(filepath, "wb") as f:
+                                        f.write(response.content)
+
+                                    print(f"Downloaded image: {filename}")
+                                    # Return relative path for web access
+                                    return f"/data/product-images/{filename}"
+
+                    except Exception as e:
+                        print(f"Failed to download from {image_url[:50]}...: {e}")
+                        continue
+
+        except Exception as e:
+            print(f"Image search error for '{query}': {e}")
+            continue
+
+        # Small delay between different queries
+        await asyncio.sleep(0.3)
+
+    return None
 
 router = APIRouter(prefix="/api", tags=["equipment"])
 
@@ -519,9 +548,17 @@ async def upload_equipment(
 
 
 @router.get("/equipment")
-async def get_equipment_list():
-    """Get all equipment."""
-    equipment = database.get_all_equipment()
+async def get_equipment_list(
+    sort_by: str = "created_at",
+    sort_order: str = "desc"
+):
+    """Get all equipment with sorting.
+
+    Args:
+        sort_by: Column to sort by (created_at, equipment_name, manufacturer, model_number)
+        sort_order: Sort order (asc, desc)
+    """
+    equipment = database.get_all_equipment(sort_by=sort_by, sort_order=sort_order)
     return {"equipment": equipment}
 
 

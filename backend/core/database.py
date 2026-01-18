@@ -266,11 +266,24 @@ def get_equipment(equipment_id: int) -> Optional[dict]:
         return row_to_dict(row)
 
 
-def get_all_equipment() -> List[dict]:
-    """Get all equipment."""
+def get_all_equipment(sort_by: str = "created_at", sort_order: str = "desc") -> List[dict]:
+    """Get all equipment with sorting.
+
+    Args:
+        sort_by: Column to sort by (created_at, equipment_name, manufacturer, model_number)
+        sort_order: Sort order (asc, desc)
+    """
+    # Validate sort_by to prevent SQL injection
+    allowed_columns = ["created_at", "equipment_name", "manufacturer", "model_number", "updated_at"]
+    if sort_by not in allowed_columns:
+        sort_by = "created_at"
+
+    # Validate sort_order
+    sort_order = "ASC" if sort_order.lower() == "asc" else "DESC"
+
     with get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM equipment ORDER BY created_at DESC")
+        cursor.execute(f"SELECT * FROM equipment ORDER BY {sort_by} {sort_order}")
         rows = cursor.fetchall()
         return [row_to_dict(row) for row in rows]
 

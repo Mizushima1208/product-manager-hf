@@ -76,7 +76,17 @@
             <div class="card">
                 <div class="card-header">
                     <div class="card-title">📋 機械一覧</div>
-                    <button class="btn btn-ghost btn-sm" id="refresh-btn">🔄 更新</button>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <select id="equipment-sort-select" class="sort-select" style="padding: 4px 8px; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem; background: var(--bg-secondary);">
+                            <option value="created_at-desc">登録日 (新しい順)</option>
+                            <option value="created_at-asc">登録日 (古い順)</option>
+                            <option value="equipment_name-asc">名前 (A→Z)</option>
+                            <option value="equipment_name-desc">名前 (Z→A)</option>
+                            <option value="manufacturer-asc">メーカー (A→Z)</option>
+                            <option value="manufacturer-desc">メーカー (Z→A)</option>
+                        </select>
+                        <button class="btn btn-ghost btn-sm" id="refresh-btn">🔄 更新</button>
+                    </div>
                 </div>
                 <div class="card-body">
                     <div id="equipment-list"></div>
