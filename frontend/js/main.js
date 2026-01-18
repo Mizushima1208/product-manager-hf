@@ -7,7 +7,7 @@ const DEFAULT_IMAGE = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/s
 
 // 状態
 let selectedFile = null;
-let selectedEngine = 'gemini-vision'; // デフォルト: Gemini Vision（推奨）
+let selectedEngine = 'google-vision-gemini'; // デフォルト: Google Vision OCR + Gemini（高精度）
 let driveConnected = false;
 let progressInterval = null;
 let localProgressInterval = null;
@@ -18,7 +18,7 @@ let currentPage = 'equipment';
 let currentDetailEquipmentId = null;
 
 // 初期化
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     loadEngines();
     loadEquipment();
     loadConfig();
@@ -28,9 +28,16 @@ document.addEventListener('DOMContentLoaded', () => {
     setupDetailModal();
     setupPageNavigation();
     setupSignboardModal();
-    checkDriveStatus();
+    setupDropZone();
     loadVisionConfig();
     setupVisionCredentials();
+
+    // フォルダ情報を先に読み込んでからドライブ状態を確認
+    await loadFolderInfo();
+    checkDriveStatus();
+
+    // API使用量を読み込み
+    loadApiUsage();
 });
 
 // モーダル
@@ -268,11 +275,16 @@ function setupTabs() {
 async function loadConfig() {
     try {
         const data = await api.get('/api/config');
-        document.getElementById('current-folder-id').textContent = data.google_drive_folder_id || '未設定';
-        document.getElementById('folder-id-input').value = data.google_drive_folder_id || '';
-        if (data.has_credentials) {
-            document.getElementById('credentials-upload').classList.add('uploaded');
-            document.getElementById('credentials-status').textContent = '✓ credentials.json アップロード済み';
+        const folderIdEl = document.getElementById('current-folder-id');
+        const folderInputEl = document.getElementById('folder-id-input');
+        const credentialsUploadEl = document.getElementById('credentials-upload');
+        const credentialsStatusEl = document.getElementById('credentials-status');
+
+        if (folderIdEl) folderIdEl.textContent = data.google_drive_folder_id || '未設定';
+        if (folderInputEl) folderInputEl.value = data.google_drive_folder_id || '';
+        if (data.has_credentials && credentialsUploadEl) {
+            credentialsUploadEl.classList.add('uploaded');
+            if (credentialsStatusEl) credentialsStatusEl.textContent = '✓ credentials.json アップロード済み';
         }
     } catch (error) { console.error('設定の読み込みに失敗:', error); }
 }
@@ -412,29 +424,102 @@ async function checkDriveStatus() {
     const loadBtn = document.getElementById('load-drive-files-btn');
     const processBtn = document.getElementById('process-all-btn');
 
+    if (statusText) statusText.textContent = 'Google ドライブに接続中...';
+
     try {
         // 実際にファイル一覧を取得して接続確認
         const data = await api.get('/api/google-drive/equipment-images');
         const connected = data.files !== undefined;
+        const fileCount = data.files ? data.files.length : 0;
 
         if (connected) {
             if (indicator) indicator.classList.add('connected');
-            if (statusText) statusText.textContent = `Google ドライブ接続済み（${data.files.length}件のファイル）`;
+            if (statusText) statusText.textContent = `Google ドライブ接続済み（${fileCount}件のファイル）`;
             if (modalDot) modalDot.classList.add('connected');
             if (modalText) modalText.textContent = '接続済み';
             driveConnected = true;
             if (loadBtn) loadBtn.disabled = false;
-            if (processBtn) processBtn.disabled = false;
+            if (processBtn) processBtn.disabled = fileCount === 0;
+
+            // ファイルがある場合は自動的にファイル一覧を表示
+            if (fileCount > 0) {
+                displayDriveFiles(data.files);
+            } else {
+                const container = document.getElementById('drive-files');
+                container.style.display = 'block';
+                container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 20px;">📂 フォルダにファイルがありません<br><small>Google Driveの指定フォルダを確認してください</small></p>';
+            }
         }
     } catch (error) {
+        console.error('Drive status check error:', error);
         if (indicator) indicator.classList.remove('connected');
-        if (statusText) statusText.textContent = 'Google ドライブ未接続（設定を確認してください）';
+        if (statusText) statusText.textContent = `Google ドライブ接続エラー: ${error.message || '接続失敗'}`;
         if (modalDot) modalDot.classList.remove('connected');
         if (modalText) modalText.textContent = '未接続';
         driveConnected = false;
-        if (loadBtn) loadBtn.disabled = true;
+        // ファイル読込ボタンは常に有効（ユーザーが手動で試せるように）
+        if (loadBtn) loadBtn.disabled = false;
         if (processBtn) processBtn.disabled = true;
     }
+}
+
+// フォルダ情報を保持
+let folderInfo = null;
+
+// フォルダ情報を取得
+async function loadFolderInfo() {
+    try {
+        folderInfo = await api.get('/api/google-drive/folder-info');
+        console.log('Folder info:', folderInfo);
+    } catch (error) {
+        console.error('Failed to load folder info:', error);
+    }
+}
+
+// ファイル一覧を表示する共通関数
+function displayDriveFiles(files) {
+    const container = document.getElementById('drive-files');
+    const processBtn = document.getElementById('process-all-btn');
+    container.style.display = 'block';
+
+    // フォルダリンクを生成
+    let folderLinks = '';
+    if (folderInfo && folderInfo.equipment_folder_urls) {
+        folderLinks = folderInfo.equipment_folder_urls.map((url, i) =>
+            `<a href="${url}" target="_blank" style="color: var(--primary); text-decoration: underline;">フォルダ${i + 1}</a>`
+        ).join(' | ');
+    }
+
+    if (files.length === 0) {
+        container.innerHTML = `
+            <div style="padding: 16px; background: var(--bg-secondary); border-radius: 8px; text-align: center;">
+                <p style="color: var(--text-muted); margin-bottom: 12px;">📂 フォルダにファイルがありません</p>
+                ${folderLinks ? `<p style="font-size: 0.85rem;">確認先: ${folderLinks}</p>` : ''}
+                <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 8px;">
+                    ※ 上記フォルダに画像をアップロードしてから「ファイル読込」を押してください
+                </p>
+            </div>
+        `;
+        if (processBtn) processBtn.disabled = true;
+        return;
+    }
+
+    container.innerHTML = `
+        <div style="padding: 8px 12px; background: var(--bg-secondary); border-radius: 8px; margin-bottom: 12px;">
+            <strong>📁 ${files.length}件のファイル</strong>
+            ${folderLinks ? `<span style="font-size: 0.85rem; margin-left: 12px;">${folderLinks}</span>` : ''}
+        </div>
+        ${files.map(file => `
+            <div class="drive-file">
+                <a href="${file.image_url}" target="_blank" title="クリックで画像を開く" style="cursor: pointer;">
+                    <img src="${file.thumbnail_url}" alt="" style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px; margin-right: 8px; transition: transform 0.2s;" onerror="this.style.display='none'" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">
+                </a>
+                <span class="drive-file-name" style="flex: 1;">${file.name}</span>
+                <button class="btn btn-primary btn-sm" onclick="processSingleFile('${file.id}', '${file.name.replace(/'/g, "\\'")}')">処理</button>
+            </div>
+        `).join('')}
+    `;
+    if (processBtn) processBtn.disabled = false;
 }
 
 async function connectGoogleDrive() {
@@ -470,23 +555,21 @@ async function connectGoogleDrive() {
 
 async function loadDriveFiles() {
     const container = document.getElementById('drive-files');
+    const processBtn = document.getElementById('process-all-btn');
     container.style.display = 'block';
     container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
     try {
+        showToast('ファイル一覧を取得中...');
         const data = await api.get('/api/google-drive/equipment-images');
-        if (data.files.length === 0) {
-            container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 20px;">画像ファイルが見つかりません<br><small>Google Driveフォルダを確認してください</small></p>';
-            return;
+        displayDriveFiles(data.files || []);
+        if (data.files && data.files.length > 0) {
+            showToast(`${data.files.length}件のファイルを読み込みました`);
         }
-        container.innerHTML = data.files.map(file => `
-            <div class="drive-file">
-                <img src="${file.thumbnail_url}" alt="" style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px; margin-right: 8px;">
-                <span class="drive-file-name">${file.name}</span>
-                <button class="btn btn-primary btn-sm" onclick="processSingleFile('${file.id}', '${file.name.replace(/'/g, "\\'")}')">処理</button>
-            </div>
-        `).join('');
-        showToast(`${data.files.length}件のファイルを読み込みました`);
-    } catch (error) { container.innerHTML = '<p style="color: var(--danger); text-align: center; padding: 20px;">ファイルの読み込みに失敗しました</p>'; }
+    } catch (error) {
+        console.error('loadDriveFiles error:', error);
+        container.innerHTML = `<p style="color: var(--danger); text-align: center; padding: 20px;">ファイルの読み込みに失敗しました<br><small>${error.message || 'エラー'}</small></p>`;
+        if (processBtn) processBtn.disabled = true;
+    }
 }
 
 window.processSingleFile = async function(fileId, fileName) {
@@ -495,10 +578,201 @@ window.processSingleFile = async function(fileId, fileName) {
     formData.append('llm_engine', selectedEngine);
     try {
         const response = await fetch(`/api/google-drive/process/${fileId}`, { method: 'POST', body: formData });
-        if (response.ok) { showToast(`${fileName} を処理しました`); loadEquipment(); }
-        else throw new Error('処理に失敗しました');
-    } catch (error) { showToast(`${fileName} の処理に失敗しました`, 'error'); }
+        if (response.ok) {
+            const data = await response.json();
+            showToast(`${fileName} を処理しました`);
+            loadEquipment();
+            loadApiUsage(); // 使用量を更新
+
+            // OCR結果モーダルを表示
+            if (data.equipment) {
+                showOcrResultModal(fileId, fileName, data.equipment);
+            }
+        } else {
+            // エラー詳細を取得
+            const errorData = await response.json().catch(() => ({}));
+            const errorMsg = errorData.detail || `HTTPエラー ${response.status}`;
+            console.error('Process error:', errorMsg);
+            showToast(`${fileName} の処理に失敗: ${errorMsg}`, 'error');
+        }
+    } catch (error) {
+        console.error('Process exception:', error);
+        showToast(`${fileName} の処理に失敗: ${error.message}`, 'error');
+    }
 };
+
+// OCR結果モーダルを表示
+function showOcrResultModal(fileId, fileName, equipment) {
+    const modal = document.getElementById('ocr-result-modal');
+    const imageEl = document.getElementById('ocr-result-image');
+    const rawTextEl = document.getElementById('ocr-raw-text');
+    const extractedInfoEl = document.getElementById('ocr-extracted-info');
+
+    // 画像を設定
+    imageEl.src = `/api/google-drive/image/${fileId}`;
+    imageEl.alt = fileName;
+
+    // OCRテキストを表示
+    const rawText = equipment.raw_text || '(テキストが読み取れませんでした)';
+    rawTextEl.textContent = rawText;
+
+    // 抽出結果を表示
+    const fields = [
+        { key: 'equipment_name', label: '機械名' },
+        { key: 'manufacturer', label: 'メーカー' },
+        { key: 'model_number', label: '型番' },
+        { key: 'serial_number', label: 'シリアル番号' },
+        { key: 'weight', label: '重量' },
+        { key: 'output_power', label: '出力' },
+        { key: 'engine_model', label: 'エンジン型式' },
+        { key: 'year_manufactured', label: '製造年' }
+    ];
+
+    extractedInfoEl.innerHTML = fields.map(f => {
+        const value = equipment[f.key] || '-';
+        return `
+            <div style="background: var(--bg-secondary); padding: 8px 12px; border-radius: 6px;">
+                <div style="font-size: 0.75rem; color: var(--text-muted);">${f.label}</div>
+                <div style="font-weight: 600;">${value}</div>
+            </div>
+        `;
+    }).join('');
+
+    modal.classList.add('visible');
+}
+
+// OCR結果モーダルを閉じる
+function closeOcrResultModal() {
+    document.getElementById('ocr-result-modal').classList.remove('visible');
+}
+
+// JSON読み込みモーダル
+function openJsonImportModal() {
+    document.getElementById('json-import-modal').classList.add('visible');
+    document.getElementById('json-paste-input').value = '';
+    document.getElementById('json-file-input').value = '';
+    document.getElementById('json-import-result').style.display = 'none';
+    loadJsonFolderFiles();
+}
+
+// フォルダ内のJSONファイル一覧を読み込み
+async function loadJsonFolderFiles() {
+    const container = document.getElementById('json-folder-files');
+    container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+    try {
+        const data = await api.get('/api/json-import/files');
+
+        if (data.files.length === 0) {
+            container.innerHTML = `
+                <p style="color: var(--text-muted); text-align: center; margin: 0;">
+                    JSONファイルがありません<br>
+                    <small>${data.folder}</small>
+                </p>
+            `;
+            return;
+        }
+
+        container.innerHTML = data.files.map(file => `
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px; border-bottom: 1px solid var(--border);">
+                <div>
+                    <div style="font-weight: 600;">${file.name}</div>
+                    <div style="font-size: 0.8rem; color: var(--text-muted);">
+                        ${file.equipment_count}件の機械データ
+                    </div>
+                </div>
+                <button class="btn btn-primary btn-sm" onclick="importJsonFromFolder('${file.name}')">読み込み</button>
+            </div>
+        `).join('');
+    } catch (error) {
+        container.innerHTML = `<p style="color: var(--danger);">読み込みエラー: ${error.message}</p>`;
+    }
+}
+
+// フォルダからJSONをインポート
+window.importJsonFromFolder = async function(filename) {
+    const resultDiv = document.getElementById('json-import-result');
+    resultDiv.style.display = 'block';
+    resultDiv.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+    try {
+        const response = await fetch(`/api/json-import/import/${encodeURIComponent(filename)}`, {
+            method: 'POST'
+        });
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+            resultDiv.innerHTML = `
+                <p style="color: var(--success);">✓ ${data.imported_count}件の機械を読み込みました（${filename}）</p>
+            `;
+            loadEquipment();
+            loadJsonFolderFiles(); // リストを更新
+        } else {
+            resultDiv.innerHTML = `<p style="color: var(--danger);">エラー: ${data.detail || '読み込み失敗'}</p>`;
+        }
+    } catch (error) {
+        resultDiv.innerHTML = `<p style="color: var(--danger);">エラー: ${error.message}</p>`;
+    }
+};
+
+function closeJsonImportModal() {
+    document.getElementById('json-import-modal').classList.remove('visible');
+}
+
+async function submitJsonImport() {
+    const fileInput = document.getElementById('json-file-input');
+    const pasteInput = document.getElementById('json-paste-input');
+    const resultDiv = document.getElementById('json-import-result');
+
+    resultDiv.style.display = 'block';
+    resultDiv.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+    try {
+        let response;
+
+        if (fileInput.files.length > 0) {
+            // ファイルアップロード
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            response = await fetch('/api/equipment/import-json-file', {
+                method: 'POST',
+                body: formData
+            });
+        } else if (pasteInput.value.trim()) {
+            // JSON貼り付け
+            const jsonData = JSON.parse(pasteInput.value);
+            // 配列の場合は { equipment: [...] } 形式に変換
+            const payload = Array.isArray(jsonData)
+                ? { equipment: jsonData }
+                : (jsonData.equipment ? jsonData : { equipment: [jsonData] });
+
+            response = await fetch('/api/equipment/import-json', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+        } else {
+            resultDiv.innerHTML = '<p style="color: var(--danger);">JSONファイルを選択するか、JSONを貼り付けてください。</p>';
+            return;
+        }
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+            resultDiv.innerHTML = `
+                <p style="color: var(--success);">✓ ${data.imported_count}件の機械を読み込みました</p>
+                ${data.errors.length > 0 ? `<p style="color: var(--warning);">⚠ ${data.errors.length}件のエラー</p>` : ''}
+            `;
+            loadEquipment();
+            setTimeout(() => closeJsonImportModal(), 2000);
+        } else {
+            resultDiv.innerHTML = `<p style="color: var(--danger);">エラー: ${data.detail || '読み込み失敗'}</p>`;
+        }
+    } catch (error) {
+        console.error('JSON import error:', error);
+        resultDiv.innerHTML = `<p style="color: var(--danger);">エラー: ${error.message}</p>`;
+    }
+}
 
 async function pollProgress() {
     try {
@@ -539,6 +813,10 @@ async function processAllDriveFiles() {
     const currentFileInfo = document.getElementById('current-file-info');
     const progressErrors = document.getElementById('progress-errors');
 
+    // 処理開始を即座に表示
+    showToast('処理を開始しています...');
+    console.log('processAllDriveFiles: 処理開始');
+
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-small"></span> 処理中...';
     progressContainer.classList.add('visible');
@@ -547,15 +825,34 @@ async function processAllDriveFiles() {
     currentFileInfo.innerHTML = '<span class="spinner-small"></span><span id="current-file-name">準備中...</span>';
     progressErrors.style.display = 'none';
 
+    // 進捗表示が見えるようにスクロール
+    progressContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
     progressInterval = setInterval(pollProgress, 500);
     const formData = new FormData();
     formData.append('llm_engine', selectedEngine);
 
     try {
+        console.log('processAllDriveFiles: API呼び出し中...');
         const data = await api.post('/api/google-drive/equipment-images/process-all', formData);
+        console.log('processAllDriveFiles: API応答', data);
         await pollProgress();
-        if (data.success) { showToast(`${data.processed_count}件の機械を処理しました`); loadEquipment(); }
-    } catch (error) { showToast('処理に失敗しました', 'error'); }
+        if (data.success) {
+            if (data.processed_count === 0) {
+                showToast('処理するファイルがありませんでした');
+            } else {
+                showToast(`${data.processed_count}件の機械を処理しました`);
+            }
+            loadEquipment();
+            loadApiUsage(); // 使用量を更新
+        } else {
+            showToast('処理が完了しましたが、エラーがあります', 'error');
+            loadApiUsage(); // エラー時も使用量を更新
+        }
+    } catch (error) {
+        console.error('processAllDriveFiles: エラー', error);
+        showToast(`処理に失敗しました: ${error.message || 'サーバーエラー'}`, 'error');
+    }
     finally {
         if (progressInterval) { clearInterval(progressInterval); progressInterval = null; }
         btn.disabled = false;
@@ -568,16 +865,15 @@ async function processAllDriveFiles() {
 function setupDropZone() {
     const dropZone = document.getElementById('drop-zone');
     const fileInput = document.getElementById('file-input');
-    const credentialsUpload = document.getElementById('credentials-upload');
-    const credentialsInput = document.getElementById('credentials-input');
+
+    // 要素が存在しない場合はスキップ
+    if (!dropZone || !fileInput) return;
 
     dropZone.addEventListener('click', () => fileInput.click());
     dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
     dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
     dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.classList.remove('dragover'); if (e.dataTransfer.files.length > 0) handleFileSelect(e.dataTransfer.files[0]); });
     fileInput.addEventListener('change', (e) => { if (e.target.files.length > 0) handleFileSelect(e.target.files[0]); });
-    credentialsUpload.addEventListener('click', () => credentialsInput.click());
-    credentialsInput.addEventListener('change', (e) => { if (e.target.files.length > 0) uploadCredentials(e.target.files[0]); });
 }
 
 function handleFileSelect(file) {
@@ -829,21 +1125,149 @@ async function clearAllEquipment() {
     catch (error) { showToast('削除に失敗しました', 'error'); }
 }
 
+// API使用量の読み込み
+async function loadApiUsage() {
+    try {
+        const data = await api.get('/api/config/api-usage');
+        const countEl = document.getElementById('api-usage-count');
+        const barEl = document.getElementById('api-usage-bar');
+
+        if (countEl && barEl) {
+            const usage = data.usage_count || 0;
+            const limit = data.free_limit || 1000;
+            const remaining = data.remaining || (limit - usage);
+            const percentage = Math.min(100, (usage / limit) * 100);
+
+            countEl.textContent = `${usage} / ${limit} (残り ${remaining})`;
+            barEl.style.width = `${percentage}%`;
+
+            // 80%以上使用で警告色
+            if (percentage >= 80) {
+                barEl.style.background = 'var(--danger)';
+            } else if (percentage >= 50) {
+                barEl.style.background = 'var(--warning)';
+            } else {
+                barEl.style.background = 'var(--success)';
+            }
+        }
+    } catch (error) {
+        console.error('API使用量の取得に失敗:', error);
+        const countEl = document.getElementById('api-usage-count');
+        if (countEl) countEl.textContent = '取得失敗';
+    }
+}
+
+// APIテスト（Gemini + Vision）
+async function testGeminiApi() {
+    const btn = document.getElementById('test-api-btn');
+    const resultDiv = document.getElementById('api-test-result');
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-small"></span> テスト中...';
+    resultDiv.style.display = 'block';
+    resultDiv.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+    let html = '';
+
+    // 1. Test Vision API
+    try {
+        const visionResponse = await fetch('/api/config/test-vision');
+        const visionData = await visionResponse.json();
+
+        html += '<h4 style="margin: 0 0 12px 0;">📷 Cloud Vision API テスト</h4>';
+
+        if (visionData.service_account_configured) {
+            html += `<p>✓ サービスアカウント: ${visionData.client_email}</p>`;
+            html += `<p>✓ プロジェクト: ${visionData.project_id}</p>`;
+        } else {
+            html += `<p style="color: var(--danger);">✗ サービスアカウント未設定</p>`;
+        }
+
+        if (visionData.api_enabled) {
+            html += `<p style="color: var(--success);"><strong>✓ Cloud Vision API: 有効</strong></p>`;
+        } else if (visionData.error) {
+            html += `<p style="color: var(--danger);"><strong>✗ ${visionData.error}</strong></p>`;
+            if (visionData.enable_url) {
+                html += `<p><a href="${visionData.enable_url}" target="_blank" style="color: var(--primary);">→ APIを有効化する</a></p>`;
+            }
+        }
+
+        html += '<hr style="margin: 12px 0; border: none; border-top: 1px solid var(--border);">';
+    } catch (error) {
+        html += `<p style="color: var(--danger);">Vision APIテストに失敗: ${error.message}</p>`;
+    }
+
+    // 2. Test Gemini API
+    try {
+        const response = await fetch('/api/config/test-gemini');
+        const data = await response.json();
+
+        html += '<h4 style="margin: 0 0 12px 0;">🤖 Gemini API テスト</h4>';
+        html += `<p><strong>APIキー:</strong> ${data.api_key_prefix || '未設定'}</p>`;
+
+        if (data.test_result) {
+            if (data.test_result.success) {
+                html += `<p style="color: var(--success);"><strong>✓ テスト成功!</strong> (${data.test_result.model})</p>`;
+            } else {
+                html += `<p style="color: var(--danger);"><strong>✗ テスト失敗:</strong> ${data.test_result.error}</p>`;
+            }
+        }
+    } catch (error) {
+        html += `<p style="color: var(--danger);">Gemini APIテストに失敗: ${error.message}</p>`;
+    }
+
+    resultDiv.innerHTML = html;
+    btn.disabled = false;
+    btn.innerHTML = '🔧 APIテスト';
+}
+
 // イベントリスナー
 function setupEventListeners() {
     document.getElementById('refresh-btn').addEventListener('click', loadEquipment);
     document.getElementById('clear-all-btn').addEventListener('click', clearAllEquipment);
     document.getElementById('load-drive-files-btn').addEventListener('click', loadDriveFiles);
     document.getElementById('process-all-btn').addEventListener('click', processAllDriveFiles);
-    document.getElementById('save-folder-btn').addEventListener('click', saveFolderId);
 
-    // JSONインポート
-    document.getElementById('import-json-btn').addEventListener('click', importAllJsonFiles);
+    // APIテストボタン
+    const testApiBtn = document.getElementById('test-api-btn');
+    if (testApiBtn) {
+        testApiBtn.addEventListener('click', testGeminiApi);
+    }
 
-    // 設定モーダル内の接続ボタン
-    const settingsConnectBtn = document.getElementById('settings-connect-drive-btn');
-    if (settingsConnectBtn) {
-        settingsConnectBtn.addEventListener('click', connectGoogleDrive);
+    // OCR結果モーダル
+    const closeOcrBtn = document.getElementById('close-ocr-modal');
+    if (closeOcrBtn) {
+        closeOcrBtn.addEventListener('click', closeOcrResultModal);
+    }
+    const ocrModal = document.getElementById('ocr-result-modal');
+    if (ocrModal) {
+        ocrModal.addEventListener('click', (e) => {
+            if (e.target === ocrModal) closeOcrResultModal();
+        });
+    }
+
+    // JSON読み込みモーダル
+    const importJsonBtn = document.getElementById('import-json-btn');
+    if (importJsonBtn) {
+        importJsonBtn.addEventListener('click', openJsonImportModal);
+    }
+    const closeJsonImportBtn = document.getElementById('close-json-import-modal');
+    if (closeJsonImportBtn) {
+        closeJsonImportBtn.addEventListener('click', closeJsonImportModal);
+    }
+    const cancelJsonImportBtn = document.getElementById('cancel-json-import');
+    if (cancelJsonImportBtn) {
+        cancelJsonImportBtn.addEventListener('click', closeJsonImportModal);
+    }
+    const submitJsonImportBtn = document.getElementById('submit-json-import');
+    if (submitJsonImportBtn) {
+        submitJsonImportBtn.addEventListener('click', submitJsonImport);
+    }
+    const jsonImportModal = document.getElementById('json-import-modal');
+    if (jsonImportModal) {
+        jsonImportModal.addEventListener('click', (e) => {
+            if (e.target === jsonImportModal) closeJsonImportModal();
+        });
     }
 
     // 設定セクションの開閉
@@ -1054,6 +1478,123 @@ function setupSignboardModal() {
     document.getElementById('refresh-signboards-btn').addEventListener('click', loadSignboards);
     document.getElementById('clear-all-signboards-btn').addEventListener('click', clearAllSignboards);
     modal.addEventListener('click', (e) => { if (e.target === modal) closeSignboardModal(); });
+
+    // 履歴モーダルのセットアップ
+    setupHistoryModal();
+}
+
+// 入出庫履歴モーダル
+let allHistoryData = [];
+let allSignboardsData = [];
+
+function setupHistoryModal() {
+    const modal = document.getElementById('history-modal');
+    if (!modal) return;
+
+    document.getElementById('view-history-btn').addEventListener('click', openHistoryModal);
+    document.getElementById('close-history-modal').addEventListener('click', closeHistoryModal);
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeHistoryModal(); });
+
+    // フィルター変更時
+    document.getElementById('history-filter-signboard').addEventListener('change', filterHistory);
+}
+
+async function openHistoryModal() {
+    document.getElementById('history-modal').classList.add('visible');
+    await loadHistory();
+}
+
+function closeHistoryModal() {
+    document.getElementById('history-modal').classList.remove('visible');
+}
+
+async function loadHistory() {
+    const listEl = document.getElementById('history-list');
+    listEl.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+    try {
+        // 履歴と看板一覧を並行取得
+        const [historyRes, signboardsRes] = await Promise.all([
+            api.get('/api/signboards/history/all'),
+            api.get('/api/signboards')
+        ]);
+
+        allHistoryData = historyRes.history || [];
+        allSignboardsData = signboardsRes.signboards || [];
+
+        // フィルターのオプションを更新
+        updateFilterOptions();
+
+        // 履歴を表示
+        renderHistory(allHistoryData);
+    } catch (error) {
+        listEl.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><p>履歴の読み込みに失敗しました</p></div>';
+    }
+}
+
+function updateFilterOptions() {
+    const select = document.getElementById('history-filter-signboard');
+    select.innerHTML = '<option value="">すべて表示</option>';
+
+    allSignboardsData.forEach(s => {
+        const option = document.createElement('option');
+        option.value = s.id;
+        option.textContent = s.comment || `ID: ${s.id}`;
+        select.appendChild(option);
+    });
+}
+
+function filterHistory() {
+    const selectedId = document.getElementById('history-filter-signboard').value;
+
+    if (!selectedId) {
+        renderHistory(allHistoryData);
+    } else {
+        const filtered = allHistoryData.filter(h => h.signboard_id == selectedId);
+        renderHistory(filtered);
+    }
+}
+
+function renderHistory(historyList) {
+    const listEl = document.getElementById('history-list');
+
+    if (historyList.length === 0) {
+        listEl.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📋</div><p>履歴がありません</p></div>';
+        return;
+    }
+
+    // 日付でソート（新しい順）
+    const sorted = [...historyList].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+    listEl.innerHTML = `
+        <table class="history-table">
+            <thead>
+                <tr>
+                    <th>日時</th>
+                    <th>看板</th>
+                    <th>種別</th>
+                    <th>数量</th>
+                    <th>理由</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${sorted.map(h => {
+                    const date = new Date(h.created_at).toLocaleString('ja-JP');
+                    const typeClass = h.change_type === 'add' ? 'history-add' : 'history-subtract';
+                    const typeLabel = h.change_type === 'add' ? '入庫' : '出庫';
+                    const signLabel = h.signboard_name || `ID: ${h.signboard_id}`;
+                    const qtyChange = h.change_type === 'add' ? `+${h.change_amount}` : `-${h.change_amount}`;
+                    return `
+                        <tr class="${typeClass}">
+                            <td>${date}</td>
+                            <td>${signLabel}</td>
+                            <td><span class="history-badge ${typeClass}">${typeLabel}</span></td>
+                            <td>${qtyChange} (${h.quantity_before}→${h.quantity_after})</td>
+                            <td>${h.reason || '-'}</td>
+                        </tr>`;
+                }).join('')}
+            </tbody>
+        </table>`;
 }
 
 function openSignboardModal(signboard = null) {
@@ -1515,47 +2056,5 @@ async function clearAllSignboards() {
         loadSignboards();
     } catch (error) {
         showToast('削除に失敗しました', 'error');
-    }
-}
-
-// ============================================
-// JSONインポート機能
-// ============================================
-async function importAllJsonFiles() {
-    if (!confirm('json-importフォルダのJSONファイルをインポートしますか？')) {
-        return;
-    }
-
-    const btn = document.getElementById('import-json-btn');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-small"></span> インポート中...';
-
-    try {
-        const response = await fetch('/api/json-import/import-all', {
-            method: 'POST'
-        });
-
-        if (!response.ok) {
-            throw new Error('インポートに失敗しました');
-        }
-
-        const data = await response.json();
-
-        if (data.success) {
-            showToast(`${data.imported}件の機械をインポートしました`);
-            loadEquipment();
-        } else {
-            showToast(data.message || 'インポートに失敗しました', 'error');
-        }
-
-        if (data.errors && data.errors.length > 0) {
-            console.error('Import errors:', data.errors);
-        }
-    } catch (error) {
-        showToast('インポートに失敗しました', 'error');
-        console.error('Import error:', error);
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = '📥 インポート実行';
     }
 }

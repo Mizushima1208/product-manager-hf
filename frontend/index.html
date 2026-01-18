@@ -43,7 +43,23 @@
                         <div class="drive-actions">
                             <button class="btn btn-secondary" id="load-drive-files-btn">📂 ファイル読込</button>
                             <button class="btn btn-primary" id="process-all-btn" disabled>⚡ 全て処理</button>
+                            <button class="btn btn-secondary" id="import-json-btn" title="JSONファイルから機械情報をインポート">📥 JSON読込</button>
+                            <button class="btn btn-ghost" id="test-api-btn" title="API接続テスト">🔧 APIテスト</button>
                         </div>
+                        <div id="api-usage-display" style="margin-top: 12px; padding: 12px; background: var(--bg-secondary); border-radius: 8px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <span style="font-weight: 600;">📊 Cloud Vision API</span>
+                                <span id="api-usage-count" style="font-size: 0.9rem;">処理数: 0</span>
+                            </div>
+                            <div style="background: var(--border); border-radius: 4px; height: 8px; overflow: hidden;">
+                                <div id="api-usage-bar" style="background: var(--primary); height: 100%; width: 0%; transition: width 0.3s;"></div>
+                            </div>
+                            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">
+                                無料枠: 1,000画像/月 |
+                                <a href="https://console.cloud.google.com/apis/api/vision.googleapis.com/metrics" target="_blank" style="color: var(--primary);">Google Cloudで使用量確認</a>
+                            </div>
+                        </div>
+                        <div id="api-test-result" style="display: none; margin-top: 12px; padding: 12px; background: var(--bg-secondary); border-radius: 8px; font-size: 0.85rem;"></div>
                         <div class="drive-files" id="drive-files" style="display: none;"></div>
                         <div class="progress-container" id="progress-container">
                             <div class="progress-header"><span>処理中...</span><span id="progress-count">0 / 0</span></div>
@@ -77,15 +93,6 @@
                             <h3 id="equipment-count">0</h3>
                             <p>登録機械数</p>
                         </div>
-                    </div>
-                </div>
-            </div>
-            <div class="card">
-                <div class="card-header"><div class="card-title">📥 JSONインポート</div></div>
-                <div class="card-body">
-                    <div class="json-import-section">
-                        <p class="form-hint" style="margin-bottom: 12px;">data/json-import フォルダから一括読み込み</p>
-                        <button class="btn btn-primary" id="import-json-btn">📥 インポート実行</button>
                     </div>
                 </div>
             </div>
@@ -154,12 +161,109 @@
                 <div class="card-header"><div class="card-title">クイック操作</div></div>
                 <div class="card-body">
                     <div class="quick-actions">
+                        <button class="quick-action-btn" id="view-history-btn">📋 入出庫履歴を見る</button>
                         <button class="quick-action-btn danger" id="clear-all-signboards-btn">🗑️ 全データを削除</button>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+    </div>
+
+    <!-- JSON読み込みモーダル -->
+    <div class="modal-overlay" id="json-import-modal">
+        <div class="modal" style="max-width: 800px;">
+            <div class="modal-header">
+                <div class="modal-title">📥 JSON読み込み</div>
+                <button class="modal-close" id="close-json-import-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- フォルダからの読み込み -->
+                <div style="margin-bottom: 20px;">
+                    <h4 style="margin: 0 0 12px 0; font-size: 1rem;">📂 フォルダから読み込み</h4>
+                    <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">
+                        <code>data/json-import/</code> フォルダ内のJSONファイル
+                    </p>
+                    <div id="json-folder-files" style="max-height: 200px; overflow-y: auto; background: var(--bg-secondary); border-radius: 8px; padding: 12px;">
+                        <div class="loading"><div class="spinner"></div></div>
+                    </div>
+                </div>
+
+                <hr style="border: none; border-top: 1px solid var(--border); margin: 20px 0;">
+
+                <!-- 手動アップロード/ペースト -->
+                <div>
+                    <h4 style="margin: 0 0 12px 0; font-size: 1rem;">📎 手動で読み込み</h4>
+
+                    <div class="form-group" style="margin-bottom: 16px;">
+                        <label class="form-label">JSONファイルをアップロード</label>
+                        <input type="file" id="json-file-input" accept=".json" class="form-input" style="padding: 8px;">
+                    </div>
+
+                    <div style="text-align: center; margin: 12px 0; color: var(--text-muted); font-size: 0.85rem;">または</div>
+
+                    <div class="form-group" style="margin-bottom: 16px;">
+                        <label class="form-label">JSONを貼り付け</label>
+                        <textarea id="json-paste-input" class="form-input" rows="6" placeholder='{ "equipment": [{ "equipment_name": "草刈機", "model_number": "ABC-123" }] }'></textarea>
+                    </div>
+
+                    <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                        <button class="btn btn-secondary" id="cancel-json-import">キャンセル</button>
+                        <button class="btn btn-primary" id="submit-json-import">読み込み</button>
+                    </div>
+                </div>
+
+                <div id="json-import-result" style="margin-top: 16px; display: none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- OCR結果モーダル -->
+    <div class="modal-overlay" id="ocr-result-modal">
+        <div class="modal" style="max-width: 700px;">
+            <div class="modal-header">
+                <div class="modal-title">📝 OCR読み取り結果</div>
+                <button class="modal-close" id="close-ocr-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="display: flex; gap: 16px;">
+                    <div style="flex: 1;">
+                        <h4 style="margin: 0 0 8px 0; font-size: 0.9rem;">📷 処理画像</h4>
+                        <div id="ocr-image-container" style="max-height: 300px; overflow: hidden; border-radius: 8px; background: var(--bg-secondary);">
+                            <img id="ocr-result-image" src="" alt="処理画像" style="width: 100%; height: auto; display: block;">
+                        </div>
+                    </div>
+                    <div style="flex: 1;">
+                        <h4 style="margin: 0 0 8px 0; font-size: 0.9rem;">📄 OCRテキスト</h4>
+                        <div id="ocr-raw-text" style="background: var(--bg-secondary); padding: 12px; border-radius: 8px; font-family: monospace; font-size: 0.85rem; white-space: pre-wrap; max-height: 300px; overflow-y: auto;"></div>
+                    </div>
+                </div>
+                <hr style="margin: 16px 0; border: none; border-top: 1px solid var(--border);">
+                <h4 style="margin: 0 0 8px 0; font-size: 0.9rem;">🔍 抽出結果</h4>
+                <div id="ocr-extracted-info" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 入出庫履歴モーダル -->
+    <div class="modal-overlay" id="history-modal">
+        <div class="modal" style="max-width: 800px;">
+            <div class="modal-header">
+                <div class="modal-title">📋 入出庫履歴</div>
+                <button class="modal-close" id="close-history-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group" style="margin-bottom: 16px;">
+                    <label class="form-label">看板でフィルター</label>
+                    <select class="form-input" id="history-filter-signboard">
+                        <option value="">すべて表示</option>
+                    </select>
+                </div>
+                <div id="history-list" style="max-height: 400px; overflow-y: auto;">
+                    <div class="loading"><div class="spinner"></div></div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- 工事看板 新規登録/編集モーダル -->
@@ -249,52 +353,6 @@
                     </div>
                     <div class="settings-section-content" id="engine-section">
                         <div class="engine-selector" id="engine-selector"></div>
-                    </div>
-                </div>
-
-                <!-- Google ドライブ設定 -->
-                <div class="settings-section">
-                    <div class="settings-section-header" data-section="gdrive">
-                        <span>☁️ Google ドライブ接続</span>
-                        <span class="settings-toggle">▼</span>
-                    </div>
-                    <div class="settings-section-content" id="gdrive-section">
-                        <div class="settings-status-bar">
-                            <span class="status-dot" id="modal-status-dot"></span>
-                            <span id="modal-status-text">確認中...</span>
-                        </div>
-
-                        <div class="settings-instructions">
-                            <div class="instructions-title">📋 接続手順</div>
-                            <ol class="instructions-list">
-                                <li><a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a> でプロジェクトを作成</li>
-                                <li><a href="https://console.cloud.google.com/apis/library/drive.googleapis.com" target="_blank">Google Drive API</a> を有効化</li>
-                                <li><a href="https://console.cloud.google.com/apis/credentials/consent" target="_blank">OAuth同意画面</a> を設定（外部→テストユーザーに自分を追加）</li>
-                                <li><a href="https://console.cloud.google.com/apis/credentials" target="_blank">認証情報</a> → OAuthクライアントID（デスクトップアプリ）を作成</li>
-                                <li>JSONをダウンロードして下にアップロード</li>
-                                <li>「接続」ボタンでGoogleアカウントにログイン</li>
-                            </ol>
-                        </div>
-
-                        <div class="form-group">
-                            <label class="form-label">API認証情報 (credentials.json)</label>
-                            <div class="credentials-drop" id="credentials-upload">
-                                <input type="file" id="credentials-input" accept=".json">
-                                <div class="credentials-drop-icon">📁</div>
-                                <p id="credentials-status">クリックして credentials.json をアップロード</p>
-                            </div>
-                        </div>
-
-                        <div class="form-group">
-                            <label class="form-label">フォルダURL または ID</label>
-                            <input type="text" class="form-input" id="folder-id-input" placeholder="https://drive.google.com/drive/folders/xxxxx">
-                            <p class="form-hint">現在: <span id="current-folder-id">未設定</span></p>
-                        </div>
-
-                        <div class="settings-buttons">
-                            <button class="btn btn-secondary" id="save-folder-btn">💾 フォルダ保存</button>
-                            <button class="btn btn-primary" id="settings-connect-drive-btn">🔗 接続</button>
-                        </div>
                     </div>
                 </div>
 
@@ -481,6 +539,6 @@
         </div>
     </div>
 
-    <script type="module" src="js/main.js?v=24"></script>
+    <script type="module" src="js/main.js?v=22"></script>
 </body>
 </html>

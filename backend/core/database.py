@@ -120,6 +120,28 @@ def init_db():
             )
         """)
 
+        # API使用量追跡テーブル
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS api_usage (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                api_name TEXT NOT NULL,
+                year_month TEXT NOT NULL,
+                usage_count INTEGER DEFAULT 0,
+                free_limit INTEGER DEFAULT 1000,
+                created_at TEXT,
+                updated_at TEXT,
+                UNIQUE(api_name, year_month)
+            )
+        """)
+
+        # 初期データを挿入（存在しない場合のみ）
+        from datetime import datetime
+        current_month = datetime.now().strftime("%Y-%m")
+        cursor.execute("""
+            INSERT OR IGNORE INTO api_usage (api_name, year_month, usage_count, free_limit, created_at, updated_at)
+            VALUES ('cloud-vision', ?, 0, 1000, datetime('now'), datetime('now'))
+        """, (current_month,))
+
         conn.commit()
 
 
@@ -429,6 +451,82 @@ def get_all_quantity_history() -> List[dict]:
             ORDER BY h.created_at DESC
         """)
         return [row_to_dict(row) for row in cursor.fetchall()]
+
+
+# ========== API使用量追跡 ==========
+
+def get_current_month() -> str:
+    """Get current year-month string (YYYY-MM)."""
+    from datetime import datetime
+    return datetime.now().strftime("%Y-%m")
+
+
+def increment_api_usage(api_name: str = "cloud-vision") -> dict:
+    """Increment API usage counter for current month."""
+    year_month = get_current_month()
+
+    with get_connection() as conn:
+        cursor = conn.cursor()
+
+        # Try to insert or update
+        cursor.execute("""
+            INSERT INTO api_usage (api_name, year_month, usage_count, free_limit, created_at, updated_at)
+            VALUES (?, ?, 1, 1000, datetime('now'), datetime('now'))
+            ON CONFLICT(api_name, year_month) DO UPDATE SET
+                usage_count = usage_count + 1,
+                updated_at = datetime('now')
+        """, (api_name, year_month))
+
+        conn.commit()
+        return get_api_usage(api_name, year_month)
+
+
+def get_api_usage(api_name: str = "cloud-vision", year_month: str = None) -> dict:
+    """Get API usage for a specific month."""
+    if year_month is None:
+        year_month = get_current_month()
+
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT * FROM api_usage WHERE api_name = ? AND year_month = ?
+        """, (api_name, year_month))
+        row = cursor.fetchone()
+
+        if row:
+            return row_to_dict(row)
+        else:
+            return {
+                "api_name": api_name,
+                "year_month": year_month,
+                "usage_count": 0,
+                "free_limit": 1000
+            }
+
+
+def get_all_api_usage(api_name: str = "cloud-vision") -> List[dict]:
+    """Get all API usage history."""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT * FROM api_usage WHERE api_name = ? ORDER BY year_month DESC
+        """, (api_name,))
+        return [row_to_dict(row) for row in cursor.fetchall()]
+
+
+def reset_api_usage(api_name: str = "cloud-vision", year_month: str = None) -> bool:
+    """Reset API usage counter."""
+    if year_month is None:
+        year_month = get_current_month()
+
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE api_usage SET usage_count = 0, updated_at = datetime('now')
+            WHERE api_name = ? AND year_month = ?
+        """, (api_name, year_month))
+        conn.commit()
+        return cursor.rowcount > 0
 
 
 # Initialize database on module load

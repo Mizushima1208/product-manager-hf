@@ -76,7 +76,7 @@ async def extract_from_image(image_bytes: bytes, api_key: str = None) -> Optiona
     if not key:
         raise Exception("Gemini API Key が設定されていません。環境変数 GEMINI_API_KEY を設定してください。")
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key={key}"
 
     # Encode image to base64
     image_base64 = base64.b64encode(image_bytes).decode('utf-8')
@@ -123,7 +123,7 @@ async def extract_with_gemini(ocr_text: str, api_key: str = None) -> Optional[di
     if not key:
         raise Exception("Gemini API Key が設定されていません。環境変数 GEMINI_API_KEY を設定してください。")
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key={key}"
 
     payload = {
         "contents": [{

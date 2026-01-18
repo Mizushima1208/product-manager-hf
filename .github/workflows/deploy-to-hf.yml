@@ -33,7 +33,7 @@ jobs:
           api = HfApi()
           api.upload_folder(
               folder_path='.',
-              repo_id='Ryo12ju/product-manager',
+              repo_id='PJ-horikoshidoboku/product-manager',
               repo_type='space',
               ignore_patterns=['.git*', '__pycache__', '*.pyc'],
           )

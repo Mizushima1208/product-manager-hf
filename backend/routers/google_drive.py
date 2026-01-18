@@ -19,6 +19,18 @@ EQUIPMENT_IMAGE_FOLDER_IDS = [
 ]
 
 
+@router.get("/folder-info")
+async def get_folder_info():
+    """Get information about configured folders."""
+    return {
+        "equipment_folders": EQUIPMENT_IMAGE_FOLDER_IDS,
+        "signboard_folder": SIGNBOARD_TEMPLATE_FOLDER_ID,
+        "equipment_folder_urls": [
+            f"https://drive.google.com/drive/folders/{fid}" for fid in EQUIPMENT_IMAGE_FOLDER_IDS
+        ]
+    }
+
+
 @router.get("/status")
 async def get_status():
     """Check Google Drive connection status."""
@@ -95,7 +107,7 @@ async def get_progress():
 
 @router.post("/process")
 async def process_all_files(
-    llm_engine: str = Form(default="gemini-vision")
+    llm_engine: str = Form(default="google-vision-gemini")
 ):
     """Process all image files from Google Drive folder."""
     from core import database
@@ -162,7 +174,7 @@ async def process_all_files(
 @router.post("/process/{file_id}")
 async def process_single_file(
     file_id: str,
-    llm_engine: str = Form(default="gemini-vision")
+    llm_engine: str = Form(default="google-vision-gemini")
 ):
     """Process a single file from Google Drive."""
     try:
@@ -296,7 +308,7 @@ async def list_equipment_images():
 
 @router.post("/equipment-images/process-all")
 async def process_all_equipment_images(
-    llm_engine: str = Form(default="gemini-vision")
+    llm_engine: str = Form(default="google-vision-gemini")
 ):
     """Process all equipment images from Google Drive folders."""
     from core import database

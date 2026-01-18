@@ -1,5 +1,4 @@
 """Equipment management endpoints."""
-import json
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from typing import Optional, List
@@ -10,8 +9,10 @@ from core import database
 
 # ローカル画像フォルダのパス
 LOCAL_IMAGES_PATH = Path(__file__).parent.parent.parent / "data" / "images"
-JSON_IMPORT_PATH = Path(__file__).parent.parent.parent / "data" / "json-import"
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"}
+
+# JSONインポートフォルダのパス
+JSON_IMPORT_PATH = Path(__file__).parent.parent.parent / "data" / "json-import"
 
 router = APIRouter(prefix="/api", tags=["equipment"])
 
@@ -31,16 +32,252 @@ class EquipmentUpdate(BaseModel):
     specifications: Optional[str] = None
 
 
+class EquipmentImport(BaseModel):
+    """Schema for importing equipment from JSON."""
+    equipment_name: Optional[str] = None
+    model_number: Optional[str] = None
+    serial_number: Optional[str] = None
+    manufacturer: Optional[str] = None
+    weight: Optional[str] = None
+    output_power: Optional[str] = None
+    engine_model: Optional[str] = None
+    year_manufactured: Optional[str] = None
+    specifications: Optional[str] = None
+    raw_text: Optional[str] = None
+    file_name: Optional[str] = None
+
+
+class EquipmentImportList(BaseModel):
+    """Schema for importing multiple equipment from JSON."""
+    equipment: List[EquipmentImport]
+
+
 @router.get("/llm-engines")
 async def get_llm_engines():
     """Get available LLM engines for extraction."""
     return {"engines": await get_available_llm_engines()}
 
 
+@router.post("/equipment/import-json")
+async def import_equipment_from_json(data: EquipmentImportList):
+    """Import equipment from JSON data (e.g., from Claude VLM output).
+
+    Expected JSON format:
+    {
+        "equipment": [
+            {
+                "equipment_name": "草刈機",
+                "model_number": "ABC-123",
+                "manufacturer": "メーカー名",
+                "serial_number": "SN12345",
+                "weight": "5.5 kg",
+                "output_power": "1.2 kW",
+                "engine_model": "エンジン型式",
+                "year_manufactured": "2020",
+                "specifications": "その他仕様",
+                "raw_text": "OCRで読み取ったテキスト",
+                "file_name": "image.jpg"
+            }
+        ]
+    }
+    """
+    imported = []
+    errors = []
+
+    for i, item in enumerate(data.equipment):
+        try:
+            equipment_data = {
+                "equipment_name": item.equipment_name,
+                "model_number": item.model_number,
+                "serial_number": item.serial_number,
+                "manufacturer": item.manufacturer,
+                "weight": item.weight,
+                "output_power": item.output_power,
+                "engine_model": item.engine_model,
+                "year_manufactured": item.year_manufactured,
+                "specifications": item.specifications,
+                "raw_text": item.raw_text or "(JSONインポート)",
+                "ocr_engine": "json-import",
+                "llm_engine": "claude-vlm",
+                "file_name": item.file_name
+            }
+            equipment = database.create_equipment(equipment_data)
+            imported.append(equipment)
+        except Exception as e:
+            errors.append({"index": i, "error": str(e)})
+
+    return {
+        "success": True,
+        "imported_count": len(imported),
+        "equipment": imported,
+        "errors": errors
+    }
+
+
+@router.post("/equipment/import-json-file")
+async def import_equipment_from_json_file(file: UploadFile = File(...)):
+    """Import equipment from a JSON file upload."""
+    import json
+
+    try:
+        content = await file.read()
+        data = json.loads(content.decode('utf-8'))
+
+        # Handle both single object and array
+        if isinstance(data, list):
+            equipment_list = data
+        elif isinstance(data, dict):
+            if "equipment" in data:
+                equipment_list = data["equipment"]
+            else:
+                equipment_list = [data]
+        else:
+            raise HTTPException(status_code=400, detail="Invalid JSON format")
+
+        imported = []
+        errors = []
+
+        for i, item in enumerate(equipment_list):
+            try:
+                equipment_data = {
+                    "equipment_name": item.get("equipment_name"),
+                    "model_number": item.get("model_number"),
+                    "serial_number": item.get("serial_number"),
+                    "manufacturer": item.get("manufacturer"),
+                    "weight": item.get("weight"),
+                    "output_power": item.get("output_power"),
+                    "engine_model": item.get("engine_model"),
+                    "year_manufactured": item.get("year_manufactured"),
+                    "specifications": item.get("specifications"),
+                    "raw_text": item.get("raw_text", "(JSONインポート)"),
+                    "ocr_engine": "json-import",
+                    "llm_engine": "claude-vlm",
+                    "file_name": item.get("file_name")
+                }
+                equipment = database.create_equipment(equipment_data)
+                imported.append(equipment)
+            except Exception as e:
+                errors.append({"index": i, "error": str(e)})
+
+        return {
+            "success": True,
+            "imported_count": len(imported),
+            "equipment": imported,
+            "errors": errors
+        }
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid JSON: {str(e)}")
+
+
+@router.get("/json-import/files")
+async def list_json_import_files():
+    """List JSON files in the data/json-import folder."""
+    import json
+
+    JSON_IMPORT_PATH.mkdir(parents=True, exist_ok=True)
+
+    files = []
+    for file_path in JSON_IMPORT_PATH.iterdir():
+        if file_path.is_file() and file_path.suffix.lower() == '.json':
+            # Try to peek at content
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = json.load(f)
+                    if isinstance(content, list):
+                        count = len(content)
+                    elif isinstance(content, dict) and 'equipment' in content:
+                        count = len(content['equipment'])
+                    else:
+                        count = 1
+            except:
+                count = "?"
+
+            files.append({
+                "name": file_path.name,
+                "path": str(file_path),
+                "size": file_path.stat().st_size,
+                "equipment_count": count,
+                "modified": file_path.stat().st_mtime
+            })
+
+    # Sort by modification time (newest first)
+    files.sort(key=lambda x: x['modified'], reverse=True)
+
+    return {
+        "files": files,
+        "folder": str(JSON_IMPORT_PATH)
+    }
+
+
+@router.post("/json-import/import/{filename}")
+async def import_json_from_folder(filename: str):
+    """Import a specific JSON file from the data/json-import folder."""
+    import json
+
+    file_path = JSON_IMPORT_PATH / filename
+
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail=f"File not found: {filename}")
+
+    if not file_path.suffix.lower() == '.json':
+        raise HTTPException(status_code=400, detail="File must be a JSON file")
+
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        # Handle different formats
+        if isinstance(data, list):
+            equipment_list = data
+        elif isinstance(data, dict):
+            if "equipment" in data:
+                equipment_list = data["equipment"]
+            else:
+                equipment_list = [data]
+        else:
+            raise HTTPException(status_code=400, detail="Invalid JSON format")
+
+        imported = []
+        errors = []
+
+        for i, item in enumerate(equipment_list):
+            try:
+                equipment_data = {
+                    "equipment_name": item.get("equipment_name"),
+                    "model_number": item.get("model_number"),
+                    "serial_number": item.get("serial_number"),
+                    "manufacturer": item.get("manufacturer"),
+                    "weight": item.get("weight"),
+                    "output_power": item.get("output_power"),
+                    "engine_model": item.get("engine_model"),
+                    "year_manufactured": item.get("year_manufactured"),
+                    "specifications": item.get("specifications"),
+                    "raw_text": item.get("raw_text", f"(JSONインポート: {filename})"),
+                    "ocr_engine": "json-import",
+                    "llm_engine": "claude-vlm",
+                    "file_name": item.get("file_name") or filename
+                }
+                equipment = database.create_equipment(equipment_data)
+                imported.append(equipment)
+            except Exception as e:
+                errors.append({"index": i, "error": str(e)})
+
+        return {
+            "success": True,
+            "filename": filename,
+            "imported_count": len(imported),
+            "equipment": imported,
+            "errors": errors
+        }
+
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid JSON: {str(e)}")
+
+
 @router.post("/equipment/upload")
 async def upload_equipment(
     file: UploadFile = File(...),
-    llm_engine: str = Form(default="gemini-vision")
+    llm_engine: str = Form(default="google-vision-gemini")
 ):
     """Upload and process an equipment image."""
     if not file.content_type.startswith("image/"):
@@ -144,7 +381,7 @@ async def get_local_files():
 @router.post("/local-files/process")
 async def process_local_file(
     filename: str = Form(...),
-    llm_engine: str = Form(default="gemini-vision")
+    llm_engine: str = Form(default="google-vision-gemini")
 ):
     """Process a single file from the local images folder."""
     file_path = LOCAL_IMAGES_PATH / filename
@@ -164,7 +401,7 @@ async def process_local_file(
 @router.post("/local-files/process-all")
 async def process_all_local_files(
     background_tasks: BackgroundTasks,
-    llm_engine: str = Form(default="gemini-vision")
+    llm_engine: str = Form(default="google-vision-gemini")
 ):
     """Start processing all files in the local images folder."""
     LOCAL_IMAGES_PATH.mkdir(parents=True, exist_ok=True)
@@ -245,63 +482,3 @@ async def decrement_equipment_quantity(equipment_id: int):
     new_quantity = max(0, current - 1)
     updated = database.update_equipment(equipment_id, {"quantity": new_quantity})
     return {"success": True, "equipment": updated}
-
-
-# ========== JSONインポート機能 ==========
-
-@router.post("/json-import/import-all")
-async def import_all_json_files():
-    """Import all JSON files from the json-import folder."""
-    JSON_IMPORT_PATH.mkdir(parents=True, exist_ok=True)
-
-    files = [
-        f.name for f in JSON_IMPORT_PATH.iterdir()
-        if f.is_file() and f.suffix.lower() == ".json"
-    ]
-
-    if not files:
-        return {"success": False, "message": "No JSON files found in folder"}
-
-    total_imported = 0
-    all_errors = []
-
-    for filename in files:
-        file_path = JSON_IMPORT_PATH / filename
-        try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-
-            if not isinstance(data, list):
-                data = [data]
-
-            for i, item in enumerate(data):
-                try:
-                    equipment_data = {
-                        "equipment_name": item.get("equipment_name"),
-                        "model_number": item.get("model_number"),
-                        "manufacturer": item.get("manufacturer"),
-                        "serial_number": item.get("serial_number"),
-                        "weight": item.get("weight"),
-                        "output_power": item.get("output_power"),
-                        "engine_model": item.get("engine_model"),
-                        "year_manufactured": item.get("year_manufactured"),
-                        "specifications": item.get("specifications"),
-                        "tool_category": item.get("tool_category"),
-                        "purchase_date": item.get("purchase_date"),
-                        "quantity": item.get("quantity", 1),
-                        "llm_engine": "json-import",
-                        "file_name": filename
-                    }
-                    database.create_equipment(equipment_data)
-                    total_imported += 1
-                except Exception as e:
-                    all_errors.append({"file": filename, "index": i, "error": str(e)})
-        except Exception as e:
-            all_errors.append({"file": filename, "error": str(e)})
-
-    return {
-        "success": True,
-        "imported": total_imported,
-        "files_processed": len(files),
-        "errors": all_errors
-    }

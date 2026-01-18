@@ -16,19 +16,36 @@ def ocr_with_google_vision(image_bytes: bytes) -> str:
     """Perform OCR using Google Cloud Vision API (high accuracy, pay-per-use)."""
     try:
         from google.cloud import vision
+        from google.oauth2 import service_account
         from core.config import VISION_CREDENTIALS_FILE
+        import json
 
-        # Set credentials from local file if not set via environment
-        if not os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
-            if os.path.exists(VISION_CREDENTIALS_FILE):
-                os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = VISION_CREDENTIALS_FILE
-            else:
-                raise HTTPException(
-                    status_code=500,
-                    detail="Google Vision API認証情報が設定されていません。設定画面でサービスアカウントキーをアップロードしてください。"
-                )
+        client = None
 
-        client = vision.ImageAnnotatorClient()
+        # 1. 環境変数からJSON直接読み込み（HuggingFace Secrets用）
+        service_account_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
+        if service_account_json:
+            try:
+                credentials_info = json.loads(service_account_json)
+                credentials = service_account.Credentials.from_service_account_info(credentials_info)
+                client = vision.ImageAnnotatorClient(credentials=credentials)
+            except Exception as e:
+                print(f"Failed to use GOOGLE_SERVICE_ACCOUNT_JSON: {e}")
+
+        # 2. GOOGLE_APPLICATION_CREDENTIALS環境変数
+        if not client and os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
+            client = vision.ImageAnnotatorClient()
+
+        # 3. ローカルファイル
+        if not client and os.path.exists(VISION_CREDENTIALS_FILE):
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = VISION_CREDENTIALS_FILE
+            client = vision.ImageAnnotatorClient()
+
+        if not client:
+            raise HTTPException(
+                status_code=500,
+                detail="Google Vision API認証情報が設定されていません。HuggingFace SecretsにGOOGLE_SERVICE_ACCOUNT_JSONを設定してください。"
+            )
         image = vision.Image(content=image_bytes)
 
         # Use document_text_detection for better Japanese text recognition
@@ -44,6 +61,14 @@ def ocr_with_google_vision(image_bytes: bytes) -> str:
                 status_code=500,
                 detail=f"Google Vision API error: {response.error.message}"
             )
+
+        # API使用量をカウント
+        from core import database
+        try:
+            usage = database.increment_api_usage("cloud-vision")
+            print(f"Cloud Vision API usage incremented: {usage}")
+        except Exception as e:
+            print(f"Failed to increment API usage: {e}")
 
         # Get full text annotation
         if response.full_text_annotation:
