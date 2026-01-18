@@ -720,18 +720,37 @@ function closeJsonImportModal() {
 }
 
 // JSON一括インポート（data/json-importフォルダから）
+let jsonImportProgressInterval = null;
+
 async function importAllJsonFiles() {
-    if (!confirm('json-importフォルダのJSONファイルをインポートしますか？')) {
+    if (!confirm('json-importフォルダのJSONファイルをインポートしますか？\n（Web検索で製品画像も取得します）')) {
         return;
     }
 
     const btn = document.getElementById('import-all-json-btn');
+    const progressContainer = document.getElementById('json-import-progress');
+    const progressBar = document.getElementById('json-import-progress-bar');
+    const progressText = document.getElementById('json-import-progress-text');
+    const progressItem = document.getElementById('json-import-current-item');
+
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-small"></span> インポート中...';
+    btn.innerHTML = '<span class="spinner-small"></span> 開始中...';
+
+    // Show progress container
+    if (progressContainer) {
+        progressContainer.style.display = 'block';
+        progressBar.style.width = '0%';
+        progressText.textContent = '準備中...';
+        progressItem.textContent = '';
+    }
 
     try {
+        const formData = new FormData();
+        formData.append('fetch_images', 'true');
+
         const response = await fetch('/api/json-import/import-all', {
-            method: 'POST'
+            method: 'POST',
+            body: formData
         });
 
         if (!response.ok) {
@@ -741,17 +760,70 @@ async function importAllJsonFiles() {
         const data = await response.json();
 
         if (data.success) {
-            showToast(`${data.imported}件の機械をインポートしました`);
-            loadEquipment();
+            showToast(`${data.total}件のインポートを開始しました`);
+            btn.innerHTML = '<span class="spinner-small"></span> インポート中...';
+
+            // Start polling for progress
+            jsonImportProgressInterval = setInterval(pollJsonImportProgress, 500);
         } else {
             showToast(data.message || 'インポートに失敗しました', 'error');
+            btn.disabled = false;
+            btn.innerHTML = '📥 一括インポート';
+            if (progressContainer) progressContainer.style.display = 'none';
         }
     } catch (error) {
         showToast('インポートに失敗しました', 'error');
         console.error('Import error:', error);
-    } finally {
         btn.disabled = false;
         btn.innerHTML = '📥 一括インポート';
+        if (progressContainer) progressContainer.style.display = 'none';
+    }
+}
+
+async function pollJsonImportProgress() {
+    const btn = document.getElementById('import-all-json-btn');
+    const progressContainer = document.getElementById('json-import-progress');
+    const progressBar = document.getElementById('json-import-progress-bar');
+    const progressText = document.getElementById('json-import-progress-text');
+    const progressItem = document.getElementById('json-import-current-item');
+
+    try {
+        const response = await fetch('/api/json-import/progress');
+        const data = await response.json();
+
+        if (progressBar && progressText) {
+            const percent = data.total > 0 ? (data.current / data.total * 100) : 0;
+            progressBar.style.width = `${percent}%`;
+            progressText.textContent = `${data.current} / ${data.total} (画像: ${data.images_found}件)`;
+            if (progressItem) {
+                progressItem.textContent = data.current_item || '';
+            }
+        }
+
+        if (data.status === 'completed') {
+            if (jsonImportProgressInterval) {
+                clearInterval(jsonImportProgressInterval);
+                jsonImportProgressInterval = null;
+            }
+
+            const errorCount = data.errors?.length || 0;
+            if (errorCount > 0) {
+                showToast(`インポート完了: ${data.current}件 (エラー: ${errorCount}件, 画像: ${data.images_found}件)`);
+            } else {
+                showToast(`${data.current}件をインポートしました (画像: ${data.images_found}件)`);
+            }
+
+            loadEquipment();
+            btn.disabled = false;
+            btn.innerHTML = '📥 一括インポート';
+
+            // Hide progress after a delay
+            setTimeout(() => {
+                if (progressContainer) progressContainer.style.display = 'none';
+            }, 2000);
+        }
+    } catch (error) {
+        console.error('Progress poll error:', error);
     }
 }
 

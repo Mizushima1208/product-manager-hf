@@ -99,8 +99,18 @@
             <div class="card">
                 <div class="card-header"><div class="card-title">📥 JSON一括読込</div></div>
                 <div class="card-body">
-                    <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 12px;">data/json-import フォルダから一括読み込み</p>
+                    <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 12px;">data/json-import フォルダから一括読み込み<br>（Web検索で製品画像も取得）</p>
                     <button class="btn btn-primary" id="import-all-json-btn" style="width: 100%;">📥 一括インポート</button>
+                    <!-- 進捗表示 -->
+                    <div id="json-import-progress" style="display: none; margin-top: 12px;">
+                        <div style="background: var(--bg-secondary); border-radius: 4px; height: 8px; overflow: hidden;">
+                            <div id="json-import-progress-bar" style="background: var(--primary); height: 100%; width: 0%; transition: width 0.3s;"></div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; margin-top: 4px; font-size: 0.75rem; color: var(--text-muted);">
+                            <span id="json-import-progress-text">0 / 0</span>
+                            <span id="json-import-current-item"></span>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="card">

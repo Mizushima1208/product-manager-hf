@@ -34,6 +34,8 @@ def verify_credentials(credentials: HTTPBasicCredentials = Depends(security)):
 # フロントエンドの静的ファイル配信
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 IMAGES_DIR = FRONTEND_DIR / "images"
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+PRODUCT_IMAGES_DIR = DATA_DIR / "product-images"
 
 app.add_middleware(
     CORSMiddleware,
@@ -70,6 +72,16 @@ async def get_signboard_image(filename: str):
 async def get_equipment_image(filename: str):
     """Serve equipment images."""
     file_path = IMAGES_DIR / "equipment" / filename
+    if file_path.exists():
+        return FileResponse(file_path)
+    raise HTTPException(status_code=404, detail="Image not found")
+
+
+@app.get("/data/product-images/{filename}")
+async def get_product_image(filename: str):
+    """Serve product images downloaded from web search."""
+    PRODUCT_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+    file_path = PRODUCT_IMAGES_DIR / filename
     if file_path.exists():
         return FileResponse(file_path)
     raise HTTPException(status_code=404, detail="Image not found")
