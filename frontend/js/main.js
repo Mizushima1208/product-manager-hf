@@ -80,6 +80,9 @@ function setupDetailModal() {
     // 製品画像検索ボタン
     document.getElementById('fetch-image-btn').addEventListener('click', fetchEquipmentImage);
 
+    // 手動画像アップロード
+    document.getElementById('upload-image-input').addEventListener('change', uploadEquipmentImage);
+
     // 仕様書検索ボタン
     document.getElementById('search-spec-btn').addEventListener('click', () => searchManual('spec', '仕様書'));
 
@@ -188,7 +191,7 @@ async function fetchEquipmentImage() {
 
     const btn = document.getElementById('fetch-image-btn');
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-small"></span> 検索中...';
+    btn.innerHTML = '<span class="spinner-small"></span>';
 
     try {
         const response = await fetch(`/api/equipment/${currentDetailEquipmentId}/fetch-image`, {
@@ -210,8 +213,50 @@ async function fetchEquipmentImage() {
         console.error('Fetch image error:', error);
     } finally {
         btn.disabled = false;
-        btn.innerHTML = '🔍 製品画像を検索';
+        btn.innerHTML = '🔍 検索';
     }
+}
+
+// 手動で画像をアップロード
+async function uploadEquipmentImage(event) {
+    if (!currentDetailEquipmentId) return;
+
+    const file = event.target.files[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+        showToast('画像ファイルを選択してください', 'error');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    showToast('画像をアップロード中...');
+
+    try {
+        const response = await fetch(`/api/equipment/${currentDetailEquipmentId}/upload-image`, {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (data.success && data.image_path) {
+            document.getElementById('detail-image').src = data.image_path;
+            document.getElementById('detail-image').style.display = 'block';
+            showToast('画像をアップロードしました');
+            loadEquipment(); // カード一覧も更新
+        } else {
+            showToast(data.message || 'アップロードに失敗しました', 'error');
+        }
+    } catch (error) {
+        showToast('アップロードに失敗しました', 'error');
+        console.error('Upload image error:', error);
+    }
+
+    // ファイル入力をリセット
+    event.target.value = '';
 }
 
 // メモ保存

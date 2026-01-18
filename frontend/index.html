@@ -462,7 +462,13 @@
                 <div class="detail-content">
                     <div class="detail-image">
                         <img id="detail-image" src="" alt="機械画像" onerror="this.style.display='none'">
-                        <button class="btn btn-secondary btn-sm" id="fetch-image-btn" style="margin-top: 8px; width: 100%;">🔍 製品画像を検索</button>
+                        <div style="display: flex; gap: 4px; margin-top: 8px;">
+                            <button class="btn btn-secondary btn-sm" id="fetch-image-btn" style="flex: 1;">🔍 検索</button>
+                            <label class="btn btn-secondary btn-sm" style="flex: 1; cursor: pointer; text-align: center;">
+                                📤 手動
+                                <input type="file" id="upload-image-input" accept="image/*" style="display: none;">
+                            </label>
+                        </div>
                     </div>
                     <div class="detail-info">
                         <div class="detail-item">

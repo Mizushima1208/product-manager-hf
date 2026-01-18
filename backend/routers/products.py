@@ -944,6 +944,64 @@ async def get_bulk_fetch_progress():
     return database.processing_progress
 
 
+@router.post("/equipment/{equipment_id}/upload-image")
+async def upload_equipment_image(equipment_id: int, file: UploadFile = File(...)):
+    """Upload a custom image for equipment."""
+    import hashlib
+    import time
+
+    # Check if equipment exists
+    equipment = database.get_equipment(equipment_id)
+    if not equipment:
+        raise HTTPException(status_code=404, detail="Equipment not found")
+
+    # Validate file type
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image")
+
+    # Create folder if needed
+    PRODUCT_IMAGES_PATH.mkdir(parents=True, exist_ok=True)
+
+    # Read file content
+    content = await file.read()
+
+    # Determine extension from content type
+    content_type = file.content_type
+    if "jpeg" in content_type or "jpg" in content_type:
+        ext = ".jpg"
+    elif "png" in content_type:
+        ext = ".png"
+    elif "gif" in content_type:
+        ext = ".gif"
+    elif "webp" in content_type:
+        ext = ".webp"
+    else:
+        ext = ".jpg"
+
+    # Generate unique filename
+    hash_str = hashlib.md5(f"{equipment_id}{time.time()}".encode()).hexdigest()[:8]
+    equipment_name = equipment.get("equipment_name", "product")
+    safe_name = "".join(c for c in (equipment_name or "product")[:15] if c.isalnum() or c in "-_")
+    if not safe_name:
+        safe_name = "product"
+    filename = f"{safe_name}_{hash_str}{ext}"
+    filepath = PRODUCT_IMAGES_PATH / filename
+
+    # Save image
+    with open(filepath, "wb") as f:
+        f.write(content)
+
+    # Update equipment with image path
+    image_path = f"/data/product-images/{filename}"
+    database.update_equipment(equipment_id, {"image_path": image_path})
+
+    return {
+        "success": True,
+        "image_path": image_path,
+        "message": "画像をアップロードしました"
+    }
+
+
 @router.post("/equipment/{equipment_id}/increment")
 async def increment_equipment_quantity(equipment_id: int):
     """Increment equipment quantity by 1."""
