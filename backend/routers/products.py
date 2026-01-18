@@ -537,6 +537,70 @@ async def get_json_import_progress():
     return json_import_progress
 
 
+@router.post("/test-image-search")
+async def test_image_search(
+    equipment_name: str = Form(default="プレートコンパクター"),
+    model_number: str = Form(default="MVH-R60"),
+    manufacturer: str = Form(default="三笠産業")
+):
+    """Test image search functionality for debugging."""
+    import traceback
+
+    result = {
+        "equipment_name": equipment_name,
+        "model_number": model_number,
+        "manufacturer": manufacturer,
+        "steps": [],
+        "image_path": None,
+        "error": None
+    }
+
+    try:
+        # Step 1: Check if duckduckgo_search is available
+        result["steps"].append("1. Importing duckduckgo_search...")
+        from duckduckgo_search import DDGS
+        result["steps"].append("   OK: duckduckgo_search imported")
+
+        # Step 2: Build search query
+        query = f"{manufacturer} {model_number}"
+        result["steps"].append(f"2. Search query: {query}")
+
+        # Step 3: Try DuckDuckGo search
+        result["steps"].append("3. Executing DuckDuckGo image search...")
+        with DDGS() as ddgs:
+            images = list(ddgs.images(query, max_results=3))
+            result["steps"].append(f"   Found {len(images)} images")
+
+            if images:
+                result["steps"].append(f"   First image URL: {images[0].get('image', 'N/A')[:100]}...")
+
+        # Step 4: Try to download first image
+        if images:
+            result["steps"].append("4. Attempting to download first image...")
+            image_url = images[0].get("image")
+
+            headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+            async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+                response = await client.get(image_url, headers=headers)
+                result["steps"].append(f"   Response status: {response.status_code}")
+                result["steps"].append(f"   Content-Type: {response.headers.get('content-type', 'N/A')}")
+                result["steps"].append(f"   Content-Length: {len(response.content)} bytes")
+
+                if response.status_code == 200 and "image" in response.headers.get("content-type", ""):
+                    result["steps"].append("   OK: Image downloaded successfully")
+                    result["image_path"] = "(test - not saved)"
+                else:
+                    result["steps"].append("   FAIL: Not a valid image response")
+
+        result["steps"].append("5. Test completed")
+
+    except Exception as e:
+        result["error"] = str(e)
+        result["traceback"] = traceback.format_exc()
+
+    return result
+
+
 @router.post("/equipment/upload")
 async def upload_equipment(
     file: UploadFile = File(...),
