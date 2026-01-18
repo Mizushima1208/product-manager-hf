@@ -26,113 +26,219 @@ SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"}
 
 
 async def search_product_image(equipment_name: str, model_number: str = None, manufacturer: str = None) -> Optional[str]:
-    """Search for product image using DuckDuckGo and download it.
+    """Search for product image using multiple methods.
 
+    Uses Tavily API first (if available), then falls back to DuckDuckGo.
     Returns the local path of the downloaded image, or None if not found.
     """
-    from duckduckgo_search import DDGS
     import hashlib
     import time
+    import re
 
-    # Build multiple search queries to try
+    # Clean up inputs
+    def clean_value(val):
+        if not val or val in ["不明", "-", "なし", "N/A", ""]:
+            return None
+        return val.strip()
+
+    equipment_name = clean_value(equipment_name)
+    model_number = clean_value(model_number)
+    manufacturer = clean_value(manufacturer)
+
+    # Build search queries (prioritized)
     search_queries = []
 
-    # Query 1: Model + Manufacturer (most specific)
-    if model_number and model_number != "不明" and manufacturer and manufacturer != "不明":
+    # Query 1: Model number + Manufacturer (most specific for products)
+    if model_number and manufacturer:
+        search_queries.append(f"{manufacturer} {model_number} 製品画像")
         search_queries.append(f"{manufacturer} {model_number}")
 
-    # Query 2: Equipment name + Model
-    if equipment_name and equipment_name != "不明" and model_number and model_number != "不明":
-        search_queries.append(f"{equipment_name} {model_number}")
+    # Query 2: Model number only (often unique identifier)
+    if model_number:
+        search_queries.append(f"{model_number} カタログ")
 
     # Query 3: Equipment name + Manufacturer
-    if equipment_name and equipment_name != "不明" and manufacturer and manufacturer != "不明":
+    if equipment_name and manufacturer:
         search_queries.append(f"{manufacturer} {equipment_name}")
 
-    # Query 4: Just equipment name
-    if equipment_name and equipment_name != "不明":
-        search_queries.append(f"{equipment_name} 製品")
+    # Query 4: Equipment name + Model
+    if equipment_name and model_number:
+        search_queries.append(f"{equipment_name} {model_number}")
 
     if not search_queries:
+        print("No valid search queries could be built")
         return None
 
     # Create folder if needed
     PRODUCT_IMAGES_PATH.mkdir(parents=True, exist_ok=True)
 
-    for query in search_queries:
-        try:
-            print(f"Searching images for: {query}")
-            with DDGS() as ddgs:
-                # Search for images
-                results = list(ddgs.images(query, max_results=5))
+    # Try Tavily first (if API key is available)
+    tavily_key = os.getenv("TAVILY_API_KEY")
+    if tavily_key:
+        result = await _search_with_tavily(search_queries, equipment_name, tavily_key)
+        if result:
+            return result
 
-                if not results:
-                    print(f"No results for: {query}")
-                    continue
-
-                # Try to download images
-                for result in results:
-                    image_url = result.get("image")
-                    if not image_url:
-                        continue
-
-                    # Skip data URLs and very long URLs
-                    if image_url.startswith("data:") or len(image_url) > 500:
-                        continue
-
-                    try:
-                        # Download image with headers to avoid blocking
-                        headers = {
-                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-                        }
-                        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
-                            response = await client.get(image_url, headers=headers)
-                            if response.status_code == 200:
-                                content_type = response.headers.get("content-type", "")
-                                content_length = len(response.content)
-
-                                # Check if it's actually an image and has reasonable size
-                                if "image" in content_type and content_length > 1000:
-                                    # Determine extension
-                                    if "jpeg" in content_type or "jpg" in content_type:
-                                        ext = ".jpg"
-                                    elif "png" in content_type:
-                                        ext = ".png"
-                                    elif "gif" in content_type:
-                                        ext = ".gif"
-                                    elif "webp" in content_type:
-                                        ext = ".webp"
-                                    else:
-                                        ext = ".jpg"
-
-                                    # Generate unique filename
-                                    hash_str = hashlib.md5(f"{query}{time.time()}".encode()).hexdigest()[:8]
-                                    safe_name = "".join(c for c in (equipment_name or "img")[:15] if c.isalnum() or c in "- _")
-                                    if not safe_name:
-                                        safe_name = "product"
-                                    filename = f"{safe_name}_{hash_str}{ext}"
-                                    filepath = PRODUCT_IMAGES_PATH / filename
-
-                                    # Save image
-                                    with open(filepath, "wb") as f:
-                                        f.write(response.content)
-
-                                    print(f"Downloaded image: {filename}")
-                                    # Return relative path for web access
-                                    return f"/data/product-images/{filename}"
-
-                    except Exception as e:
-                        print(f"Failed to download from {image_url[:50]}...: {e}")
-                        continue
-
-        except Exception as e:
-            print(f"Image search error for '{query}': {e}")
-            continue
-
-        # Small delay between different queries
-        await asyncio.sleep(0.3)
+    # Fallback to DuckDuckGo
+    result = await _search_with_duckduckgo(search_queries, equipment_name)
+    if result:
+        return result
 
     return None
+
+
+async def _search_with_tavily(queries: list, equipment_name: str, api_key: str) -> Optional[str]:
+    """Search using Tavily API and extract images from results."""
+    import hashlib
+    import time
+
+    try:
+        from tavily import TavilyClient
+        client = TavilyClient(api_key=api_key)
+
+        for query in queries[:2]:  # Limit to first 2 queries to save API calls
+            try:
+                print(f"[Tavily] Searching: {query}")
+                response = client.search(
+                    query=query,
+                    search_depth="basic",
+                    include_images=True,
+                    max_results=5
+                )
+
+                # Get images from response
+                images = response.get("images", [])
+                if images:
+                    for image_url in images[:5]:
+                        downloaded = await _download_image(image_url, equipment_name)
+                        if downloaded:
+                            print(f"[Tavily] Successfully downloaded image")
+                            return downloaded
+
+            except Exception as e:
+                print(f"[Tavily] Search error: {e}")
+                continue
+
+    except ImportError:
+        print("[Tavily] Library not installed")
+    except Exception as e:
+        print(f"[Tavily] Error: {e}")
+
+    return None
+
+
+async def _search_with_duckduckgo(queries: list, equipment_name: str) -> Optional[str]:
+    """Search using DuckDuckGo image search."""
+    try:
+        from duckduckgo_search import DDGS
+
+        for query in queries:
+            try:
+                print(f"[DDG] Searching: {query}")
+                with DDGS() as ddgs:
+                    results = list(ddgs.images(query, max_results=10))
+
+                    if not results:
+                        print(f"[DDG] No results for: {query}")
+                        continue
+
+                    # Try downloading images
+                    for result in results:
+                        image_url = result.get("image")
+                        if not image_url:
+                            continue
+
+                        # Skip problematic URLs
+                        if image_url.startswith("data:") or len(image_url) > 500:
+                            continue
+
+                        # Skip small thumbnails
+                        width = result.get("width", 0)
+                        height = result.get("height", 0)
+                        if width and height and (width < 100 or height < 100):
+                            continue
+
+                        downloaded = await _download_image(image_url, equipment_name)
+                        if downloaded:
+                            print(f"[DDG] Successfully downloaded image")
+                            return downloaded
+
+            except Exception as e:
+                print(f"[DDG] Search error for '{query}': {e}")
+                continue
+
+            await asyncio.sleep(0.5)
+
+    except ImportError:
+        print("[DDG] duckduckgo_search not installed")
+    except Exception as e:
+        print(f"[DDG] Error: {e}")
+
+    return None
+
+
+async def _download_image(image_url: str, equipment_name: str) -> Optional[str]:
+    """Download image from URL and save locally."""
+    import hashlib
+    import time
+
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "image/webp,image/apng,image/*,*/*;q=0.8",
+            "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
+            "Referer": "https://www.google.com/"
+        }
+
+        async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
+            response = await client.get(image_url, headers=headers)
+
+            if response.status_code != 200:
+                return None
+
+            content_type = response.headers.get("content-type", "")
+            content_length = len(response.content)
+
+            # Validate image
+            if "image" not in content_type:
+                return None
+
+            if content_length < 5000:  # Skip very small images (likely icons)
+                return None
+
+            if content_length > 10 * 1024 * 1024:  # Skip very large images (>10MB)
+                return None
+
+            # Determine extension
+            if "jpeg" in content_type or "jpg" in content_type:
+                ext = ".jpg"
+            elif "png" in content_type:
+                ext = ".png"
+            elif "gif" in content_type:
+                ext = ".gif"
+            elif "webp" in content_type:
+                ext = ".webp"
+            else:
+                ext = ".jpg"
+
+            # Generate filename
+            hash_str = hashlib.md5(f"{image_url}{time.time()}".encode()).hexdigest()[:8]
+            safe_name = "".join(c for c in (equipment_name or "product")[:15] if c.isalnum() or c in "-_")
+            if not safe_name:
+                safe_name = "product"
+            filename = f"{safe_name}_{hash_str}{ext}"
+            filepath = PRODUCT_IMAGES_PATH / filename
+
+            # Save image
+            with open(filepath, "wb") as f:
+                f.write(response.content)
+
+            print(f"Saved image: {filename} ({content_length} bytes)")
+            return f"/data/product-images/{filename}"
+
+    except Exception as e:
+        print(f"Download error: {e}")
+        return None
 
 router = APIRouter(prefix="/api", tags=["equipment"])
 
