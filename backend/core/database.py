@@ -557,6 +557,20 @@ def get_all_quantity_history() -> List[dict]:
             return [row_to_dict(row) for row in cursor.fetchall()]
 
 
+def clear_all_quantity_history() -> bool:
+    """Clear all quantity change history."""
+    if USE_SUPABASE:
+        # Delete all records from signboard_quantity_history
+        supabase_client.table("signboard_quantity_history").delete().neq("id", 0).execute()
+        return True
+    else:
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM signboard_quantity_history")
+            conn.commit()
+            return True
+
+
 # ========== API Usage Tracking ==========
 
 def get_current_month() -> str:

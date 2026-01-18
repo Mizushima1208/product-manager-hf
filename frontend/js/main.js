@@ -1573,7 +1573,7 @@ function setupSignboardModal() {
     document.getElementById('cancel-signboard-btn').addEventListener('click', () => closeSignboardModal());
     document.getElementById('save-signboard-btn').addEventListener('click', saveSignboard);
     document.getElementById('refresh-signboards-btn').addEventListener('click', loadSignboards);
-    document.getElementById('clear-all-signboards-btn').addEventListener('click', clearAllSignboards);
+    document.getElementById('reset-all-quantities-btn').addEventListener('click', resetAllQuantities);
     modal.addEventListener('click', (e) => { if (e.target === modal) closeSignboardModal(); });
 
     // 履歴モーダルのセットアップ
@@ -2145,13 +2145,18 @@ function updateSignboardsSummaryFromDOM() {
     document.getElementById('summary-instock').textContent = total;
 }
 
-async function clearAllSignboards() {
-    if (!confirm('全ての工事看板を削除しますか?')) return;
+async function resetAllQuantities() {
+    if (!confirm('全ての看板の数量を0にリセットし、入出庫履歴をクリアしますか?')) return;
     try {
-        await api.delete('/api/signboards');
-        showToast('全ての工事看板を削除しました');
-        loadSignboards();
+        const response = await fetch('/api/signboards/reset-all-quantities', { method: 'POST' });
+        const data = await response.json();
+        if (data.success) {
+            showToast(data.message || '数量をリセットしました');
+            loadSignboards();
+        } else {
+            showToast('リセットに失敗しました', 'error');
+        }
     } catch (error) {
-        showToast('削除に失敗しました', 'error');
+        showToast('リセットに失敗しました', 'error');
     }
 }

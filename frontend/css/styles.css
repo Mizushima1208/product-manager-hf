@@ -488,6 +488,16 @@ body::after {
     border-color: var(--danger);
 }
 
+/* クイックアクション警告ボタン */
+.quick-action-btn.warning {
+    color: var(--warning);
+}
+
+.quick-action-btn.warning:hover {
+    background: rgba(245, 158, 11, 0.1);
+    border-color: var(--warning);
+}
+
 /* フォーム行レイアウト */
 .form-row {
     display: grid;

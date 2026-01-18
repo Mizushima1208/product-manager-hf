@@ -192,3 +192,24 @@ async def get_all_history():
     """Get all quantity change history."""
     history = database.get_all_quantity_history()
     return {"history": history}
+
+
+@router.post("/reset-all-quantities")
+async def reset_all_quantities():
+    """Reset all signboard quantities to 0 and clear history."""
+    signboards = database.get_all_signboards()
+    reset_count = 0
+
+    for signboard in signboards:
+        if signboard.get("quantity", 0) != 0:
+            database.update_signboard(signboard["id"], {"quantity": 0})
+            reset_count += 1
+
+    # Clear all quantity history
+    database.clear_all_quantity_history()
+
+    return {
+        "success": True,
+        "message": f"{reset_count}件の看板をリセットしました",
+        "reset_count": reset_count
+    }
