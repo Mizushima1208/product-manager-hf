@@ -757,6 +757,87 @@ async def get_local_processing_progress():
     return database.processing_progress
 
 
+@router.post("/equipment/bulk-fetch-images")
+async def bulk_fetch_images(background_tasks: BackgroundTasks):
+    """Fetch images for all equipment that don't have images yet."""
+    # Get all equipment without images
+    all_equipment = database.get_all_equipment()
+    equipment_without_images = [
+        e for e in all_equipment
+        if not e.get("image_path") or e.get("image_path") == ""
+    ]
+
+    if not equipment_without_images:
+        return {
+            "success": True,
+            "message": "すべての機器に画像が設定されています",
+            "total": 0
+        }
+
+    # Reset progress for tracking
+    database.reset_progress()
+    database.processing_progress["status"] = "fetching_images"
+    database.processing_progress["total"] = len(equipment_without_images)
+    database.processing_progress["current"] = 0
+    database.processing_progress["errors"] = []
+
+    # Start background processing
+    background_tasks.add_task(
+        _bulk_fetch_images_background,
+        equipment_without_images
+    )
+
+    return {
+        "success": True,
+        "message": f"{len(equipment_without_images)}件の機器の画像を検索中...",
+        "total": len(equipment_without_images)
+    }
+
+
+async def _bulk_fetch_images_background(equipment_list: list):
+    """Background task to fetch images for multiple equipment."""
+    import asyncio
+
+    for i, equipment in enumerate(equipment_list):
+        database.processing_progress["current"] = i + 1
+        database.processing_progress["current_file"] = equipment.get("equipment_name", f"ID: {equipment['id']}")
+
+        try:
+            equipment_name = equipment.get("equipment_name", "")
+            model_number = equipment.get("model_number", "")
+            manufacturer = equipment.get("manufacturer", "")
+
+            image_path = await search_product_image(equipment_name, model_number, manufacturer)
+
+            if image_path:
+                database.update_equipment(equipment["id"], {"image_path": image_path})
+            else:
+                database.processing_progress["errors"].append({
+                    "id": equipment["id"],
+                    "name": equipment_name,
+                    "error": "画像が見つかりませんでした"
+                })
+
+        except Exception as e:
+            database.processing_progress["errors"].append({
+                "id": equipment["id"],
+                "name": equipment.get("equipment_name", ""),
+                "error": str(e)
+            })
+
+        # Rate limiting - wait between requests
+        await asyncio.sleep(1.0)
+
+    database.processing_progress["status"] = "completed"
+    database.processing_progress["current_file"] = ""
+
+
+@router.get("/equipment/bulk-fetch-images/progress")
+async def get_bulk_fetch_progress():
+    """Get progress of bulk image fetching."""
+    return database.processing_progress
+
+
 @router.post("/equipment/{equipment_id}/increment")
 async def increment_equipment_quantity(equipment_id: int):
     """Increment equipment quantity by 1."""

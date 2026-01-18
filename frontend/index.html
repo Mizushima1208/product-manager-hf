@@ -114,6 +114,23 @@
                 </div>
             </div>
             <div class="card">
+                <div class="card-header"><div class="card-title">🔍 製品画像検索</div></div>
+                <div class="card-body">
+                    <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 12px;">画像未設定の機器をWeb検索</p>
+                    <button class="btn btn-primary" id="bulk-fetch-images-btn" style="width: 100%;">🔍 一括画像検索</button>
+                    <div id="bulk-image-progress" style="display: none; margin-top: 12px;">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 4px;">
+                            <span id="bulk-image-status">検索中...</span>
+                            <span id="bulk-image-count">0 / 0</span>
+                        </div>
+                        <div style="background: var(--border); border-radius: 4px; height: 6px; overflow: hidden;">
+                            <div id="bulk-image-bar" style="background: var(--primary); height: 100%; width: 0%; transition: width 0.3s;"></div>
+                        </div>
+                        <div id="bulk-image-current" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="card">
                 <div class="card-header"><div class="card-title">クイック操作</div></div>
                 <div class="card-body">
                     <div class="quick-actions">

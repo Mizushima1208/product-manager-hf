@@ -1178,12 +1178,109 @@ async function testGeminiApi() {
     btn.innerHTML = '🔧 APIテスト';
 }
 
+// 一括製品画像検索
+let bulkImageInterval = null;
+
+async function bulkFetchImages() {
+    const btn = document.getElementById('bulk-fetch-images-btn');
+    const progressDiv = document.getElementById('bulk-image-progress');
+    const statusEl = document.getElementById('bulk-image-status');
+    const countEl = document.getElementById('bulk-image-count');
+    const barEl = document.getElementById('bulk-image-bar');
+    const currentEl = document.getElementById('bulk-image-current');
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-small"></span> 検索中...';
+    progressDiv.style.display = 'block';
+    statusEl.textContent = '開始中...';
+    countEl.textContent = '0 / 0';
+    barEl.style.width = '0%';
+    currentEl.textContent = '';
+
+    try {
+        const response = await fetch('/api/equipment/bulk-fetch-images', { method: 'POST' });
+        const data = await response.json();
+
+        if (data.total === 0) {
+            showToast(data.message);
+            progressDiv.style.display = 'none';
+            btn.disabled = false;
+            btn.innerHTML = '🔍 一括画像検索';
+            return;
+        }
+
+        showToast(data.message);
+
+        // 進捗をポーリング
+        bulkImageInterval = setInterval(pollBulkImageProgress, 1000);
+    } catch (error) {
+        showToast('画像検索の開始に失敗しました', 'error');
+        progressDiv.style.display = 'none';
+        btn.disabled = false;
+        btn.innerHTML = '🔍 一括画像検索';
+    }
+}
+
+async function pollBulkImageProgress() {
+    const btn = document.getElementById('bulk-fetch-images-btn');
+    const progressDiv = document.getElementById('bulk-image-progress');
+    const statusEl = document.getElementById('bulk-image-status');
+    const countEl = document.getElementById('bulk-image-count');
+    const barEl = document.getElementById('bulk-image-bar');
+    const currentEl = document.getElementById('bulk-image-current');
+
+    try {
+        const response = await fetch('/api/equipment/bulk-fetch-images/progress');
+        const data = await response.json();
+
+        const percent = data.total > 0 ? (data.current / data.total * 100) : 0;
+        barEl.style.width = `${percent}%`;
+        countEl.textContent = `${data.current} / ${data.total}`;
+        currentEl.textContent = data.current_file || '';
+
+        if (data.status === 'fetching_images') {
+            statusEl.textContent = '画像検索中...';
+        } else if (data.status === 'completed') {
+            statusEl.textContent = '完了!';
+            barEl.style.width = '100%';
+
+            if (bulkImageInterval) {
+                clearInterval(bulkImageInterval);
+                bulkImageInterval = null;
+            }
+
+            const errorCount = data.errors?.length || 0;
+            if (errorCount > 0) {
+                showToast(`画像検索完了 (${data.total - errorCount}件成功, ${errorCount}件失敗)`);
+            } else {
+                showToast(`画像検索完了 (${data.total}件)`);
+            }
+
+            loadEquipment();
+
+            setTimeout(() => {
+                progressDiv.style.display = 'none';
+                btn.disabled = false;
+                btn.innerHTML = '🔍 一括画像検索';
+            }, 2000);
+        }
+    } catch (error) {
+        console.error('Progress poll error:', error);
+    }
+}
+
 // イベントリスナー
 function setupEventListeners() {
     document.getElementById('refresh-btn').addEventListener('click', loadEquipment);
     document.getElementById('clear-all-btn').addEventListener('click', clearAllEquipment);
     document.getElementById('load-drive-files-btn').addEventListener('click', loadDriveFiles);
     document.getElementById('process-all-btn').addEventListener('click', processAllDriveFiles);
+
+    // 一括画像検索
+    const bulkFetchBtn = document.getElementById('bulk-fetch-images-btn');
+    if (bulkFetchBtn) {
+        bulkFetchBtn.addEventListener('click', bulkFetchImages);
+    }
 
     // ソート選択
     const sortSelect = document.getElementById('equipment-sort-select');
