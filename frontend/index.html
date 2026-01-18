@@ -116,7 +116,11 @@
             <div class="card">
                 <div class="card-header"><div class="card-title">🔍 製品画像検索</div></div>
                 <div class="card-body">
-                    <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 12px;">画像未設定の機器をWeb検索</p>
+                    <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 8px;">製品画像をWeb検索して取得</p>
+                    <label style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem; margin-bottom: 10px; cursor: pointer;">
+                        <input type="checkbox" id="force-all-images" style="width: 16px; height: 16px;">
+                        全件再取得（既存も上書き）
+                    </label>
                     <button class="btn btn-primary" id="bulk-fetch-images-btn" style="width: 100%;">🔍 一括画像検索</button>
                     <div id="bulk-image-progress" style="display: none; margin-top: 12px;">
                         <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 4px;">

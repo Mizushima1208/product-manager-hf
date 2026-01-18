@@ -860,17 +860,30 @@ async def get_local_processing_progress():
     return database.processing_progress
 
 
-@router.post("/equipment/bulk-fetch-images")
-async def bulk_fetch_images(background_tasks: BackgroundTasks):
-    """Fetch images for all equipment that don't have images yet."""
-    # Get all equipment without images
-    all_equipment = database.get_all_equipment()
-    equipment_without_images = [
-        e for e in all_equipment
-        if not e.get("image_path") or e.get("image_path") == ""
-    ]
+class BulkFetchRequest(BaseModel):
+    """Request for bulk image fetch."""
+    force_all: bool = False  # If True, fetch for all equipment (not just missing)
 
-    if not equipment_without_images:
+
+@router.post("/equipment/bulk-fetch-images")
+async def bulk_fetch_images(background_tasks: BackgroundTasks, request: BulkFetchRequest = None):
+    """Fetch images for equipment. Use force_all=true to re-fetch all."""
+    all_equipment = database.get_all_equipment()
+
+    # Determine which equipment to process
+    if request and request.force_all:
+        # Process all equipment
+        target_equipment = all_equipment
+    else:
+        # Only equipment without valid images
+        target_equipment = [
+            e for e in all_equipment
+            if not e.get("image_path")
+            or e.get("image_path") == ""
+            or (e.get("image_path", "").startswith("/data") and not e.get("image_path", "").startswith("http"))
+        ]
+
+    if not target_equipment:
         return {
             "success": True,
             "message": "すべての機器に画像が設定されています",
@@ -880,20 +893,20 @@ async def bulk_fetch_images(background_tasks: BackgroundTasks):
     # Reset progress for tracking
     database.reset_progress()
     database.processing_progress["status"] = "fetching_images"
-    database.processing_progress["total"] = len(equipment_without_images)
+    database.processing_progress["total"] = len(target_equipment)
     database.processing_progress["current"] = 0
     database.processing_progress["errors"] = []
 
     # Start background processing
     background_tasks.add_task(
         _bulk_fetch_images_background,
-        equipment_without_images
+        target_equipment
     )
 
     return {
         "success": True,
-        "message": f"{len(equipment_without_images)}件の機器の画像を検索中...",
-        "total": len(equipment_without_images)
+        "message": f"{len(target_equipment)}件の機器の画像を検索中...",
+        "total": len(target_equipment)
     }
 
 

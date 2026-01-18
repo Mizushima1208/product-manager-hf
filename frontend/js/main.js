@@ -1233,6 +1233,8 @@ async function bulkFetchImages() {
     const countEl = document.getElementById('bulk-image-count');
     const barEl = document.getElementById('bulk-image-bar');
     const currentEl = document.getElementById('bulk-image-current');
+    const forceAllCheckbox = document.getElementById('force-all-images');
+    const forceAll = forceAllCheckbox ? forceAllCheckbox.checked : false;
 
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-small"></span> 検索中...';
@@ -1243,7 +1245,11 @@ async function bulkFetchImages() {
     currentEl.textContent = '';
 
     try {
-        const response = await fetch('/api/equipment/bulk-fetch-images', { method: 'POST' });
+        const response = await fetch('/api/equipment/bulk-fetch-images', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ force_all: forceAll })
+        });
         const data = await response.json();
 
         if (data.total === 0) {
