@@ -197,54 +197,6 @@
     </div>
     </div>
 
-    <!-- JSON読み込みモーダル -->
-    <div class="modal-overlay" id="json-import-modal">
-        <div class="modal" style="max-width: 800px;">
-            <div class="modal-header">
-                <div class="modal-title">📥 JSON読み込み</div>
-                <button class="modal-close" id="close-json-import-modal">&times;</button>
-            </div>
-            <div class="modal-body">
-                <!-- フォルダからの読み込み -->
-                <div style="margin-bottom: 20px;">
-                    <h4 style="margin: 0 0 12px 0; font-size: 1rem;">📂 フォルダから読み込み</h4>
-                    <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">
-                        <code>data/json-import/</code> フォルダ内のJSONファイル
-                    </p>
-                    <div id="json-folder-files" style="max-height: 200px; overflow-y: auto; background: var(--bg-secondary); border-radius: 8px; padding: 12px;">
-                        <div class="loading"><div class="spinner"></div></div>
-                    </div>
-                </div>
-
-                <hr style="border: none; border-top: 1px solid var(--border); margin: 20px 0;">
-
-                <!-- 手動アップロード/ペースト -->
-                <div>
-                    <h4 style="margin: 0 0 12px 0; font-size: 1rem;">📎 手動で読み込み</h4>
-
-                    <div class="form-group" style="margin-bottom: 16px;">
-                        <label class="form-label">JSONファイルをアップロード</label>
-                        <input type="file" id="json-file-input" accept=".json" class="form-input" style="padding: 8px;">
-                    </div>
-
-                    <div style="text-align: center; margin: 12px 0; color: var(--text-muted); font-size: 0.85rem;">または</div>
-
-                    <div class="form-group" style="margin-bottom: 16px;">
-                        <label class="form-label">JSONを貼り付け</label>
-                        <textarea id="json-paste-input" class="form-input" rows="6" placeholder='{ "equipment": [{ "equipment_name": "草刈機", "model_number": "ABC-123" }] }'></textarea>
-                    </div>
-
-                    <div style="display: flex; gap: 12px; justify-content: flex-end;">
-                        <button class="btn btn-secondary" id="cancel-json-import">キャンセル</button>
-                        <button class="btn btn-primary" id="submit-json-import">読み込み</button>
-                    </div>
-                </div>
-
-                <div id="json-import-result" style="margin-top: 16px; display: none;"></div>
-            </div>
-        </div>
-    </div>
-
     <!-- OCR結果モーダル -->
     <div class="modal-overlay" id="ocr-result-modal">
         <div class="modal" style="max-width: 700px;">

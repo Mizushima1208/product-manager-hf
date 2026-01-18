@@ -648,79 +648,6 @@ function closeOcrResultModal() {
     document.getElementById('ocr-result-modal').classList.remove('visible');
 }
 
-// JSON読み込みモーダル
-function openJsonImportModal() {
-    document.getElementById('json-import-modal').classList.add('visible');
-    document.getElementById('json-paste-input').value = '';
-    document.getElementById('json-file-input').value = '';
-    document.getElementById('json-import-result').style.display = 'none';
-    loadJsonFolderFiles();
-}
-
-// フォルダ内のJSONファイル一覧を読み込み
-async function loadJsonFolderFiles() {
-    const container = document.getElementById('json-folder-files');
-    container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
-
-    try {
-        const data = await api.get('/api/json-import/files');
-
-        if (data.files.length === 0) {
-            container.innerHTML = `
-                <p style="color: var(--text-muted); text-align: center; margin: 0;">
-                    JSONファイルがありません<br>
-                    <small>${data.folder}</small>
-                </p>
-            `;
-            return;
-        }
-
-        container.innerHTML = data.files.map(file => `
-            <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px; border-bottom: 1px solid var(--border);">
-                <div>
-                    <div style="font-weight: 600;">${file.name}</div>
-                    <div style="font-size: 0.8rem; color: var(--text-muted);">
-                        ${file.equipment_count}件の機械データ
-                    </div>
-                </div>
-                <button class="btn btn-primary btn-sm" onclick="importJsonFromFolder('${file.name}')">読み込み</button>
-            </div>
-        `).join('');
-    } catch (error) {
-        container.innerHTML = `<p style="color: var(--danger);">読み込みエラー: ${error.message}</p>`;
-    }
-}
-
-// フォルダからJSONをインポート
-window.importJsonFromFolder = async function(filename) {
-    const resultDiv = document.getElementById('json-import-result');
-    resultDiv.style.display = 'block';
-    resultDiv.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
-
-    try {
-        const response = await fetch(`/api/json-import/import/${encodeURIComponent(filename)}`, {
-            method: 'POST'
-        });
-        const data = await response.json();
-
-        if (response.ok && data.success) {
-            resultDiv.innerHTML = `
-                <p style="color: var(--success);">✓ ${data.imported_count}件の機械を読み込みました（${filename}）</p>
-            `;
-            loadEquipment();
-            loadJsonFolderFiles(); // リストを更新
-        } else {
-            resultDiv.innerHTML = `<p style="color: var(--danger);">エラー: ${data.detail || '読み込み失敗'}</p>`;
-        }
-    } catch (error) {
-        resultDiv.innerHTML = `<p style="color: var(--danger);">エラー: ${error.message}</p>`;
-    }
-};
-
-function closeJsonImportModal() {
-    document.getElementById('json-import-modal').classList.remove('visible');
-}
-
 // JSON一括インポート（data/json-importフォルダから）
 let jsonImportProgressInterval = null;
 
@@ -826,61 +753,6 @@ async function pollJsonImportProgress() {
         }
     } catch (error) {
         console.error('Progress poll error:', error);
-    }
-}
-
-async function submitJsonImport() {
-    const fileInput = document.getElementById('json-file-input');
-    const pasteInput = document.getElementById('json-paste-input');
-    const resultDiv = document.getElementById('json-import-result');
-
-    resultDiv.style.display = 'block';
-    resultDiv.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
-
-    try {
-        let response;
-
-        if (fileInput.files.length > 0) {
-            // ファイルアップロード
-            const formData = new FormData();
-            formData.append('file', fileInput.files[0]);
-            response = await fetch('/api/equipment/import-json-file', {
-                method: 'POST',
-                body: formData
-            });
-        } else if (pasteInput.value.trim()) {
-            // JSON貼り付け
-            const jsonData = JSON.parse(pasteInput.value);
-            // 配列の場合は { equipment: [...] } 形式に変換
-            const payload = Array.isArray(jsonData)
-                ? { equipment: jsonData }
-                : (jsonData.equipment ? jsonData : { equipment: [jsonData] });
-
-            response = await fetch('/api/equipment/import-json', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-        } else {
-            resultDiv.innerHTML = '<p style="color: var(--danger);">JSONファイルを選択するか、JSONを貼り付けてください。</p>';
-            return;
-        }
-
-        const data = await response.json();
-
-        if (response.ok && data.success) {
-            resultDiv.innerHTML = `
-                <p style="color: var(--success);">✓ ${data.imported_count}件の機械を読み込みました</p>
-                ${data.errors.length > 0 ? `<p style="color: var(--warning);">⚠ ${data.errors.length}件のエラー</p>` : ''}
-            `;
-            loadEquipment();
-            setTimeout(() => closeJsonImportModal(), 2000);
-        } else {
-            resultDiv.innerHTML = `<p style="color: var(--danger);">エラー: ${data.detail || '読み込み失敗'}</p>`;
-        }
-    } catch (error) {
-        console.error('JSON import error:', error);
-        resultDiv.innerHTML = `<p style="color: var(--danger);">エラー: ${error.message}</p>`;
     }
 }
 
@@ -1374,34 +1246,10 @@ function setupEventListeners() {
         });
     }
 
-    // JSON読み込みモーダル
-    const importJsonBtn = document.getElementById('import-json-btn');
-    if (importJsonBtn) {
-        importJsonBtn.addEventListener('click', openJsonImportModal);
-    }
-
     // JSON一括インポート
     const importAllJsonBtn = document.getElementById('import-all-json-btn');
     if (importAllJsonBtn) {
         importAllJsonBtn.addEventListener('click', importAllJsonFiles);
-    }
-    const closeJsonImportBtn = document.getElementById('close-json-import-modal');
-    if (closeJsonImportBtn) {
-        closeJsonImportBtn.addEventListener('click', closeJsonImportModal);
-    }
-    const cancelJsonImportBtn = document.getElementById('cancel-json-import');
-    if (cancelJsonImportBtn) {
-        cancelJsonImportBtn.addEventListener('click', closeJsonImportModal);
-    }
-    const submitJsonImportBtn = document.getElementById('submit-json-import');
-    if (submitJsonImportBtn) {
-        submitJsonImportBtn.addEventListener('click', submitJsonImport);
-    }
-    const jsonImportModal = document.getElementById('json-import-modal');
-    if (jsonImportModal) {
-        jsonImportModal.addEventListener('click', (e) => {
-            if (e.target === jsonImportModal) closeJsonImportModal();
-        });
     }
 
     // 設定セクションの開閉
