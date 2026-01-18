@@ -837,6 +837,9 @@ function setupEventListeners() {
     document.getElementById('process-all-btn').addEventListener('click', processAllDriveFiles);
     document.getElementById('save-folder-btn').addEventListener('click', saveFolderId);
 
+    // JSONインポート
+    document.getElementById('import-json-btn').addEventListener('click', importAllJsonFiles);
+
     // 設定モーダル内の接続ボタン
     const settingsConnectBtn = document.getElementById('settings-connect-drive-btn');
     if (settingsConnectBtn) {
@@ -1512,5 +1515,47 @@ async function clearAllSignboards() {
         loadSignboards();
     } catch (error) {
         showToast('削除に失敗しました', 'error');
+    }
+}
+
+// ============================================
+// JSONインポート機能
+// ============================================
+async function importAllJsonFiles() {
+    if (!confirm('json-importフォルダのJSONファイルをインポートしますか？')) {
+        return;
+    }
+
+    const btn = document.getElementById('import-json-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-small"></span> インポート中...';
+
+    try {
+        const response = await fetch('/api/json-import/import-all', {
+            method: 'POST'
+        });
+
+        if (!response.ok) {
+            throw new Error('インポートに失敗しました');
+        }
+
+        const data = await response.json();
+
+        if (data.success) {
+            showToast(`${data.imported}件の機械をインポートしました`);
+            loadEquipment();
+        } else {
+            showToast(data.message || 'インポートに失敗しました', 'error');
+        }
+
+        if (data.errors && data.errors.length > 0) {
+            console.error('Import errors:', data.errors);
+        }
+    } catch (error) {
+        showToast('インポートに失敗しました', 'error');
+        console.error('Import error:', error);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '📥 インポート実行';
     }
 }

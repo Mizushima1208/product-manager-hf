@@ -1,4 +1,5 @@
 """Equipment management endpoints."""
+import json
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from typing import Optional, List
@@ -9,6 +10,7 @@ from core import database
 
 # ローカル画像フォルダのパス
 LOCAL_IMAGES_PATH = Path(__file__).parent.parent.parent / "data" / "images"
+JSON_IMPORT_PATH = Path(__file__).parent.parent.parent / "data" / "json-import"
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"}
 
 router = APIRouter(prefix="/api", tags=["equipment"])
@@ -243,3 +245,63 @@ async def decrement_equipment_quantity(equipment_id: int):
     new_quantity = max(0, current - 1)
     updated = database.update_equipment(equipment_id, {"quantity": new_quantity})
     return {"success": True, "equipment": updated}
+
+
+# ========== JSONインポート機能 ==========
+
+@router.post("/json-import/import-all")
+async def import_all_json_files():
+    """Import all JSON files from the json-import folder."""
+    JSON_IMPORT_PATH.mkdir(parents=True, exist_ok=True)
+
+    files = [
+        f.name for f in JSON_IMPORT_PATH.iterdir()
+        if f.is_file() and f.suffix.lower() == ".json"
+    ]
+
+    if not files:
+        return {"success": False, "message": "No JSON files found in folder"}
+
+    total_imported = 0
+    all_errors = []
+
+    for filename in files:
+        file_path = JSON_IMPORT_PATH / filename
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+
+            if not isinstance(data, list):
+                data = [data]
+
+            for i, item in enumerate(data):
+                try:
+                    equipment_data = {
+                        "equipment_name": item.get("equipment_name"),
+                        "model_number": item.get("model_number"),
+                        "manufacturer": item.get("manufacturer"),
+                        "serial_number": item.get("serial_number"),
+                        "weight": item.get("weight"),
+                        "output_power": item.get("output_power"),
+                        "engine_model": item.get("engine_model"),
+                        "year_manufactured": item.get("year_manufactured"),
+                        "specifications": item.get("specifications"),
+                        "tool_category": item.get("tool_category"),
+                        "purchase_date": item.get("purchase_date"),
+                        "quantity": item.get("quantity", 1),
+                        "llm_engine": "json-import",
+                        "file_name": filename
+                    }
+                    database.create_equipment(equipment_data)
+                    total_imported += 1
+                except Exception as e:
+                    all_errors.append({"file": filename, "index": i, "error": str(e)})
+        except Exception as e:
+            all_errors.append({"file": filename, "error": str(e)})
+
+    return {
+        "success": True,
+        "imported": total_imported,
+        "files_processed": len(files),
+        "errors": all_errors
+    }
