@@ -77,16 +77,18 @@ function setupDetailModal() {
     });
     document.getElementById('detail-save-notes-btn').addEventListener('click', saveEquipmentNotes);
 
-    // 製品画像検索ボタン
-    document.getElementById('fetch-image-btn').addEventListener('click', fetchEquipmentImage);
-
-    // 手動画像アップロード
-    document.getElementById('upload-image-input').addEventListener('change', uploadEquipmentImage);
+    // Google Drive画像選択ボタン
+    document.getElementById('select-drive-image-btn').addEventListener('click', openDriveImageModal);
 
     // 仕様書検索ボタン
     document.getElementById('search-spec-btn').addEventListener('click', () => searchManual('spec', '仕様書'));
 
     modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('visible'); });
+
+    // Google Drive画像選択モーダル
+    const driveImageModal = document.getElementById('drive-image-modal');
+    document.getElementById('close-drive-image-modal').addEventListener('click', () => driveImageModal.classList.remove('visible'));
+    driveImageModal.addEventListener('click', (e) => { if (e.target === driveImageModal) driveImageModal.classList.remove('visible'); });
 
     // 検索結果モーダル
     const searchModal = document.getElementById('search-results-modal');
@@ -185,16 +187,57 @@ window.showEquipmentDetail = async function(id) {
     }
 };
 
-// 製品画像を検索・取得
-async function fetchEquipmentImage() {
+// Google Drive画像選択モーダルを開く
+async function openDriveImageModal() {
     if (!currentDetailEquipmentId) return;
 
-    const btn = document.getElementById('fetch-image-btn');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-small"></span>';
+    const modal = document.getElementById('drive-image-modal');
+    const listContainer = document.getElementById('drive-image-list');
+
+    modal.classList.add('visible');
+    listContainer.innerHTML = '<div style="text-align: center; padding: 20px;"><div class="spinner"></div><p>読み込み中...</p></div>';
 
     try {
-        const response = await fetch(`/api/equipment/${currentDetailEquipmentId}/fetch-image`, {
+        const response = await fetch('/api/google-drive/equipment-images');
+        const data = await response.json();
+
+        if (data.files && data.files.length > 0) {
+            let html = '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px;">';
+            for (const file of data.files) {
+                html += `
+                    <div class="drive-image-item" data-file-id="${file.id}" style="cursor: pointer; text-align: center; padding: 8px; border: 1px solid var(--border); border-radius: 8px; transition: all 0.2s;">
+                        <img src="${file.thumbnail_url}" alt="${file.name}" style="max-width: 100%; max-height: 80px; border-radius: 4px;">
+                        <div style="font-size: 0.75rem; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${file.name}</div>
+                    </div>
+                `;
+            }
+            html += '</div>';
+            listContainer.innerHTML = html;
+
+            // クリックイベントを追加
+            listContainer.querySelectorAll('.drive-image-item').forEach(item => {
+                item.addEventListener('click', () => selectDriveImage(item.dataset.fileId));
+                item.addEventListener('mouseenter', () => item.style.borderColor = 'var(--primary)');
+                item.addEventListener('mouseleave', () => item.style.borderColor = 'var(--border)');
+            });
+        } else {
+            listContainer.innerHTML = '<p style="text-align: center; color: var(--text-muted); padding: 20px;">画像が見つかりません</p>';
+        }
+    } catch (error) {
+        listContainer.innerHTML = '<p style="text-align: center; color: var(--danger); padding: 20px;">読み込みに失敗しました</p>';
+        console.error('Load drive images error:', error);
+    }
+}
+
+// Google Drive画像を選択して設定
+async function selectDriveImage(fileId) {
+    if (!currentDetailEquipmentId || !fileId) return;
+
+    const modal = document.getElementById('drive-image-modal');
+    showToast('画像を設定中...');
+
+    try {
+        const response = await fetch(`/api/equipment/${currentDetailEquipmentId}/set-drive-image/${fileId}`, {
             method: 'POST'
         });
 
@@ -203,60 +246,16 @@ async function fetchEquipmentImage() {
         if (data.success && data.image_path) {
             document.getElementById('detail-image').src = data.image_path;
             document.getElementById('detail-image').style.display = 'block';
-            showToast('製品画像を取得しました');
-            loadEquipment(); // カード一覧も更新
+            showToast('画像を設定しました');
+            loadEquipment();
+            modal.classList.remove('visible');
         } else {
-            showToast(data.message || '画像が見つかりませんでした', 'error');
+            showToast(data.message || '設定に失敗しました', 'error');
         }
     } catch (error) {
-        showToast('画像の取得に失敗しました', 'error');
-        console.error('Fetch image error:', error);
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = '🔍 検索';
+        showToast('画像の設定に失敗しました', 'error');
+        console.error('Set drive image error:', error);
     }
-}
-
-// 手動で画像をアップロード
-async function uploadEquipmentImage(event) {
-    if (!currentDetailEquipmentId) return;
-
-    const file = event.target.files[0];
-    if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-        showToast('画像ファイルを選択してください', 'error');
-        return;
-    }
-
-    const formData = new FormData();
-    formData.append('file', file);
-
-    showToast('画像をアップロード中...');
-
-    try {
-        const response = await fetch(`/api/equipment/${currentDetailEquipmentId}/upload-image`, {
-            method: 'POST',
-            body: formData
-        });
-
-        const data = await response.json();
-
-        if (data.success && data.image_path) {
-            document.getElementById('detail-image').src = data.image_path;
-            document.getElementById('detail-image').style.display = 'block';
-            showToast('画像をアップロードしました');
-            loadEquipment(); // カード一覧も更新
-        } else {
-            showToast(data.message || 'アップロードに失敗しました', 'error');
-        }
-    } catch (error) {
-        showToast('アップロードに失敗しました', 'error');
-        console.error('Upload image error:', error);
-    }
-
-    // ファイル入力をリセット
-    event.target.value = '';
 }
 
 // メモ保存

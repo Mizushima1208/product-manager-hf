@@ -954,6 +954,65 @@ async def get_bulk_fetch_progress():
     return database.processing_progress
 
 
+@router.post("/equipment/{equipment_id}/set-drive-image/{file_id}")
+async def set_equipment_drive_image(equipment_id: int, file_id: str):
+    """Set equipment image from Google Drive file."""
+    import io
+    from services.google_drive import get_google_drive_service
+
+    # Check if equipment exists
+    equipment = database.get_equipment(equipment_id)
+    if not equipment:
+        raise HTTPException(status_code=404, detail="Equipment not found")
+
+    try:
+        service = get_google_drive_service()
+        from googleapiclient.http import MediaIoBaseDownload
+
+        # Get file metadata
+        file_metadata = service.files().get(fileId=file_id, fields="name, mimeType").execute()
+
+        # Download file
+        request = service.files().get_media(fileId=file_id)
+        file_buffer = io.BytesIO()
+        downloader = MediaIoBaseDownload(file_buffer, request)
+
+        done = False
+        while not done:
+            status, done = downloader.next_chunk()
+
+        image_bytes = file_buffer.getvalue()
+
+        # Determine extension
+        mime_type = file_metadata.get('mimeType', 'image/jpeg')
+        if 'png' in mime_type:
+            ext = '.png'
+        elif 'gif' in mime_type:
+            ext = '.gif'
+        else:
+            ext = '.jpg'
+
+        filename = f"{file_metadata['name']}{ext}"
+
+        # Upload to Supabase Storage
+        image_path = database.upload_image(image_bytes, filename)
+
+        if not image_path:
+            raise HTTPException(status_code=500, detail="画像のアップロードに失敗しました")
+
+        # Update equipment
+        database.update_equipment(equipment_id, {"image_path": image_path})
+
+        return {
+            "success": True,
+            "image_path": image_path,
+            "message": "画像を設定しました"
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/equipment/{equipment_id}/upload-image")
 async def upload_equipment_image(equipment_id: int, file: UploadFile = File(...)):
     """Upload a custom image for equipment to Supabase Storage."""
