@@ -5,19 +5,24 @@ from typing import Optional, List
 from pathlib import Path
 import httpx
 import asyncio
+import os
 from services.equipment_parser import process_image_async
 from services.llm_extractor import get_available_llm_engines
 from core import database
 
-# ローカル画像フォルダのパス
-LOCAL_IMAGES_PATH = Path(__file__).parent.parent.parent / "data" / "images"
+# パス設定（HuggingFace Spaces対応）
+if os.getenv("SPACE_ID"):
+    # HuggingFace Spaces環境 - 永続ストレージを使用
+    LOCAL_IMAGES_PATH = Path("/data/images")
+    JSON_IMPORT_PATH = Path(__file__).parent.parent.parent / "data" / "json-import"  # これはリポジトリ内
+    PRODUCT_IMAGES_PATH = Path("/data/product-images")
+else:
+    # ローカル開発環境
+    LOCAL_IMAGES_PATH = Path(__file__).parent.parent.parent / "data" / "images"
+    JSON_IMPORT_PATH = Path(__file__).parent.parent.parent / "data" / "json-import"
+    PRODUCT_IMAGES_PATH = Path(__file__).parent.parent.parent / "data" / "product-images"
+
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"}
-
-# JSONインポートフォルダのパス
-JSON_IMPORT_PATH = Path(__file__).parent.parent.parent / "data" / "json-import"
-
-# 製品画像保存フォルダ
-PRODUCT_IMAGES_PATH = Path(__file__).parent.parent.parent / "data" / "product-images"
 
 
 async def search_product_image(equipment_name: str, model_number: str = None, manufacturer: str = None) -> Optional[str]:

@@ -1,11 +1,20 @@
 """SQLite database for equipment."""
 import sqlite3
+import os
 from pathlib import Path
 from typing import List, Optional
 from contextlib import contextmanager
 
 # Database file path
-DB_PATH = Path(__file__).parent.parent / "data" / "equipment.db"
+# HuggingFace Spacesでは /data が永続ストレージとして使用可能
+if os.getenv("SPACE_ID"):
+    # HuggingFace Spaces環境 - 永続ストレージを使用
+    DB_PATH = Path("/data/equipment.db")
+    PRODUCT_IMAGES_PATH = Path("/data/product-images")
+else:
+    # ローカル開発環境
+    DB_PATH = Path(__file__).parent.parent / "data" / "equipment.db"
+    PRODUCT_IMAGES_PATH = Path(__file__).parent.parent / "data" / "product-images"
 
 # Progress tracking for batch operations (in-memory)
 processing_progress = {

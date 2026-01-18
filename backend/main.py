@@ -34,8 +34,16 @@ def verify_credentials(credentials: HTTPBasicCredentials = Depends(security)):
 # フロントエンドの静的ファイル配信
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 IMAGES_DIR = FRONTEND_DIR / "images"
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
-PRODUCT_IMAGES_DIR = DATA_DIR / "product-images"
+
+# データディレクトリ（HuggingFace Spaces対応）
+if os.getenv("SPACE_ID"):
+    # HuggingFace Spaces環境 - 永続ストレージを使用
+    DATA_DIR = Path("/data")
+    PRODUCT_IMAGES_DIR = Path("/data/product-images")
+else:
+    # ローカル開発環境
+    DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+    PRODUCT_IMAGES_DIR = DATA_DIR / "product-images"
 
 app.add_middleware(
     CORSMiddleware,
