@@ -178,9 +178,7 @@ async def _search_with_duckduckgo(queries: list, equipment_name: str) -> Optiona
 
 
 async def _download_image(image_url: str, equipment_name: str) -> Optional[str]:
-    """Download image from URL and save locally."""
-    import hashlib
-    import time
+    """Download image from URL and save to Supabase Storage (or local fallback)."""
 
     try:
         headers = {
@@ -222,19 +220,18 @@ async def _download_image(image_url: str, equipment_name: str) -> Optional[str]:
                 ext = ".jpg"
 
             # Generate filename
-            hash_str = hashlib.md5(f"{image_url}{time.time()}".encode()).hexdigest()[:8]
             safe_name = "".join(c for c in (equipment_name or "product")[:15] if c.isalnum() or c in "-_")
             if not safe_name:
                 safe_name = "product"
-            filename = f"{safe_name}_{hash_str}{ext}"
-            filepath = PRODUCT_IMAGES_PATH / filename
+            filename = f"{safe_name}{ext}"
 
-            # Save image
-            with open(filepath, "wb") as f:
-                f.write(response.content)
+            # Upload to Supabase Storage (or local fallback)
+            image_url = database.upload_image(response.content, filename)
+            if image_url:
+                print(f"Saved image: {filename} ({content_length} bytes)")
+                return image_url
 
-            print(f"Saved image: {filename} ({content_length} bytes)")
-            return f"/data/product-images/{filename}"
+            return None
 
     except Exception as e:
         print(f"Download error: {e}")
@@ -946,9 +943,7 @@ async def get_bulk_fetch_progress():
 
 @router.post("/equipment/{equipment_id}/upload-image")
 async def upload_equipment_image(equipment_id: int, file: UploadFile = File(...)):
-    """Upload a custom image for equipment."""
-    import hashlib
-    import time
+    """Upload a custom image for equipment to Supabase Storage."""
 
     # Check if equipment exists
     equipment = database.get_equipment(equipment_id)
@@ -958,9 +953,6 @@ async def upload_equipment_image(equipment_id: int, file: UploadFile = File(...)
     # Validate file type
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
-
-    # Create folder if needed
-    PRODUCT_IMAGES_PATH.mkdir(parents=True, exist_ok=True)
 
     # Read file content
     content = await file.read()
@@ -978,21 +970,20 @@ async def upload_equipment_image(equipment_id: int, file: UploadFile = File(...)
     else:
         ext = ".jpg"
 
-    # Generate unique filename
-    hash_str = hashlib.md5(f"{equipment_id}{time.time()}".encode()).hexdigest()[:8]
+    # Generate filename
     equipment_name = equipment.get("equipment_name", "product")
     safe_name = "".join(c for c in (equipment_name or "product")[:15] if c.isalnum() or c in "-_")
     if not safe_name:
         safe_name = "product"
-    filename = f"{safe_name}_{hash_str}{ext}"
-    filepath = PRODUCT_IMAGES_PATH / filename
+    filename = f"{safe_name}{ext}"
 
-    # Save image
-    with open(filepath, "wb") as f:
-        f.write(content)
+    # Upload to Supabase Storage (or local fallback)
+    image_path = database.upload_image(content, filename)
+
+    if not image_path:
+        raise HTTPException(status_code=500, detail="画像のアップロードに失敗しました")
 
     # Update equipment with image path
-    image_path = f"/data/product-images/{filename}"
     database.update_equipment(equipment_id, {"image_path": image_path})
 
     return {

@@ -10,11 +10,24 @@ USE_SUPABASE = bool(SUPABASE_URL and SUPABASE_KEY)
 
 # Initialize Supabase client if configured
 supabase_client = None
+STORAGE_BUCKET = "product-images"
+
 if USE_SUPABASE:
     try:
         from supabase import create_client
         supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
         print("✓ Supabase connected")
+
+        # Ensure storage bucket exists
+        try:
+            supabase_client.storage.get_bucket(STORAGE_BUCKET)
+            print(f"✓ Storage bucket '{STORAGE_BUCKET}' ready")
+        except Exception:
+            try:
+                supabase_client.storage.create_bucket(STORAGE_BUCKET, options={"public": True})
+                print(f"✓ Storage bucket '{STORAGE_BUCKET}' created")
+            except Exception as bucket_error:
+                print(f"⚠ Storage bucket setup: {bucket_error}")
     except Exception as e:
         print(f"✗ Supabase connection failed: {e}")
         USE_SUPABASE = False
@@ -635,3 +648,67 @@ def reset_api_usage(api_name: str = "cloud-vision", year_month: str = None) -> b
                           (datetime.now().isoformat(), api_name, year_month))
             conn.commit()
             return cursor.rowcount > 0
+
+
+# ========== Image Storage ==========
+
+def upload_image(image_data: bytes, filename: str) -> Optional[str]:
+    """Upload image to Supabase Storage and return public URL.
+
+    Falls back to local storage if Supabase is not available.
+    """
+    import hashlib
+    import time
+    from pathlib import Path
+
+    # Generate unique filename
+    hash_str = hashlib.md5(f"{filename}{time.time()}".encode()).hexdigest()[:8]
+    # Get extension from filename
+    ext = Path(filename).suffix.lower() or ".jpg"
+    unique_filename = f"{hash_str}{ext}"
+
+    if USE_SUPABASE and supabase_client:
+        try:
+            # Upload to Supabase Storage
+            result = supabase_client.storage.from_(STORAGE_BUCKET).upload(
+                unique_filename,
+                image_data,
+                {"content-type": f"image/{ext.replace('.', '')}"}
+            )
+
+            # Get public URL
+            public_url = supabase_client.storage.from_(STORAGE_BUCKET).get_public_url(unique_filename)
+            print(f"✓ Image uploaded to Supabase: {unique_filename}")
+            return public_url
+
+        except Exception as e:
+            print(f"✗ Supabase storage error: {e}")
+            # Fall through to local storage
+
+    # Fallback: save locally
+    if os.getenv("SPACE_ID"):
+        local_path = Path("/data/product-images")
+    else:
+        local_path = Path(__file__).parent.parent / "data" / "product-images"
+
+    local_path.mkdir(parents=True, exist_ok=True)
+    filepath = local_path / unique_filename
+
+    with open(filepath, "wb") as f:
+        f.write(image_data)
+
+    print(f"✓ Image saved locally: {unique_filename}")
+    return f"/data/product-images/{unique_filename}"
+
+
+def get_image_url(image_path: str) -> str:
+    """Convert stored image path to accessible URL."""
+    if not image_path:
+        return ""
+
+    # If already a full URL (Supabase), return as-is
+    if image_path.startswith("http"):
+        return image_path
+
+    # If local path, return as-is (served by FastAPI)
+    return image_path

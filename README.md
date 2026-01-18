@@ -101,16 +101,27 @@ CREATE TABLE api_usage (
 );
 ```
 
-### 3. HuggingFace Spaceに環境変数を設定
+### 3. Storage Bucketの作成（画像保存用）
+
+1. Supabase Dashboard の左メニューから「Storage」をクリック
+2. 「New bucket」をクリック
+3. 以下を設定:
+   - **Name**: `product-images`
+   - **Public bucket**: ON（チェックを入れる）
+4. 「Create bucket」をクリック
+
+### 4. HuggingFace Spaceに環境変数を設定
 
 Space Settings → Repository secrets で以下を追加:
 
 | Name | Value |
 |------|-------|
 | `SUPABASE_URL` | `https://xxxxx.supabase.co` (Project URL) |
-| `SUPABASE_KEY` | `eyJhbGciOiJIUzI1...` (anon public key) |
+| `SUPABASE_KEY` | `sb_secret_...` (Secret key) |
 
-### 4. Spaceを再起動
+> **Note**: 画像アップロードにはSecret keyが必要です（anon keyでは権限不足）
+
+### 5. Spaceを再起動
 
 設定後、Spaceを再起動すると自動的にSupabaseに接続されます。
 
