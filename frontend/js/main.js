@@ -77,6 +77,9 @@ function setupDetailModal() {
     });
     document.getElementById('detail-save-notes-btn').addEventListener('click', saveEquipmentNotes);
 
+    // 製品画像検索ボタン
+    document.getElementById('fetch-image-btn').addEventListener('click', fetchEquipmentImage);
+
     // 仕様書検索ボタン
     document.getElementById('search-spec-btn').addEventListener('click', () => searchManual('spec', '仕様書'));
 
@@ -178,6 +181,38 @@ window.showEquipmentDetail = async function(id) {
         showToast('機械情報の読み込みに失敗しました', 'error');
     }
 };
+
+// 製品画像を検索・取得
+async function fetchEquipmentImage() {
+    if (!currentDetailEquipmentId) return;
+
+    const btn = document.getElementById('fetch-image-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-small"></span> 検索中...';
+
+    try {
+        const response = await fetch(`/api/equipment/${currentDetailEquipmentId}/fetch-image`, {
+            method: 'POST'
+        });
+
+        const data = await response.json();
+
+        if (data.success && data.image_path) {
+            document.getElementById('detail-image').src = data.image_path;
+            document.getElementById('detail-image').style.display = 'block';
+            showToast('製品画像を取得しました');
+            loadEquipment(); // カード一覧も更新
+        } else {
+            showToast(data.message || '画像が見つかりませんでした', 'error');
+        }
+    } catch (error) {
+        showToast('画像の取得に失敗しました', 'error');
+        console.error('Fetch image error:', error);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '🔍 製品画像を検索';
+    }
+}
 
 // メモ保存
 async function saveEquipmentNotes() {
@@ -649,37 +684,18 @@ function closeOcrResultModal() {
 }
 
 // JSON一括インポート（data/json-importフォルダから）
-let jsonImportProgressInterval = null;
-
 async function importAllJsonFiles() {
-    if (!confirm('json-importフォルダのJSONファイルをインポートしますか？\n（Web検索で製品画像も取得します）')) {
+    if (!confirm('json-importフォルダのJSONファイルをインポートしますか？')) {
         return;
     }
 
     const btn = document.getElementById('import-all-json-btn');
-    const progressContainer = document.getElementById('json-import-progress');
-    const progressBar = document.getElementById('json-import-progress-bar');
-    const progressText = document.getElementById('json-import-progress-text');
-    const progressItem = document.getElementById('json-import-current-item');
-
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-small"></span> 開始中...';
-
-    // Show progress container
-    if (progressContainer) {
-        progressContainer.style.display = 'block';
-        progressBar.style.width = '0%';
-        progressText.textContent = '準備中...';
-        progressItem.textContent = '';
-    }
+    btn.innerHTML = '<span class="spinner-small"></span> インポート中...';
 
     try {
-        const formData = new FormData();
-        formData.append('fetch_images', 'true');
-
         const response = await fetch('/api/json-import/import-all', {
-            method: 'POST',
-            body: formData
+            method: 'POST'
         });
 
         if (!response.ok) {
@@ -689,70 +705,22 @@ async function importAllJsonFiles() {
         const data = await response.json();
 
         if (data.success) {
-            showToast(`${data.total}件のインポートを開始しました`);
-            btn.innerHTML = '<span class="spinner-small"></span> インポート中...';
-
-            // Start polling for progress
-            jsonImportProgressInterval = setInterval(pollJsonImportProgress, 500);
+            const errorCount = data.errors?.length || 0;
+            if (errorCount > 0) {
+                showToast(`${data.imported}件をインポートしました (エラー: ${errorCount}件)`);
+            } else {
+                showToast(`${data.imported}件をインポートしました`);
+            }
+            loadEquipment();
         } else {
             showToast(data.message || 'インポートに失敗しました', 'error');
-            btn.disabled = false;
-            btn.innerHTML = '📥 一括インポート';
-            if (progressContainer) progressContainer.style.display = 'none';
         }
     } catch (error) {
         showToast('インポートに失敗しました', 'error');
         console.error('Import error:', error);
+    } finally {
         btn.disabled = false;
         btn.innerHTML = '📥 一括インポート';
-        if (progressContainer) progressContainer.style.display = 'none';
-    }
-}
-
-async function pollJsonImportProgress() {
-    const btn = document.getElementById('import-all-json-btn');
-    const progressContainer = document.getElementById('json-import-progress');
-    const progressBar = document.getElementById('json-import-progress-bar');
-    const progressText = document.getElementById('json-import-progress-text');
-    const progressItem = document.getElementById('json-import-current-item');
-
-    try {
-        const response = await fetch('/api/json-import/progress');
-        const data = await response.json();
-
-        if (progressBar && progressText) {
-            const percent = data.total > 0 ? (data.current / data.total * 100) : 0;
-            progressBar.style.width = `${percent}%`;
-            progressText.textContent = `${data.current} / ${data.total} (画像: ${data.images_found}件)`;
-            if (progressItem) {
-                progressItem.textContent = data.current_item || '';
-            }
-        }
-
-        if (data.status === 'completed') {
-            if (jsonImportProgressInterval) {
-                clearInterval(jsonImportProgressInterval);
-                jsonImportProgressInterval = null;
-            }
-
-            const errorCount = data.errors?.length || 0;
-            if (errorCount > 0) {
-                showToast(`インポート完了: ${data.current}件 (エラー: ${errorCount}件, 画像: ${data.images_found}件)`);
-            } else {
-                showToast(`${data.current}件をインポートしました (画像: ${data.images_found}件)`);
-            }
-
-            loadEquipment();
-            btn.disabled = false;
-            btn.innerHTML = '📥 一括インポート';
-
-            // Hide progress after a delay
-            setTimeout(() => {
-                if (progressContainer) progressContainer.style.display = 'none';
-            }, 2000);
-        }
-    } catch (error) {
-        console.error('Progress poll error:', error);
     }
 }
 

@@ -394,23 +394,9 @@ async def import_json_from_folder(filename: str):
         raise HTTPException(status_code=400, detail=f"Invalid JSON: {str(e)}")
 
 
-# JSONインポート進捗管理
-json_import_progress = {
-    "status": "idle",  # idle, processing, completed
-    "total": 0,
-    "current": 0,
-    "current_item": "",
-    "images_found": 0,
-    "errors": []
-}
-
-
 @router.post("/json-import/import-all")
-async def import_all_json_files(
-    background_tasks: BackgroundTasks,
-    fetch_images: bool = Form(default=True)
-):
-    """Import all JSON files from the data/json-import folder with optional image fetching."""
+async def import_all_json_files():
+    """Import all JSON files from the data/json-import folder."""
     import json
 
     JSON_IMPORT_PATH.mkdir(parents=True, exist_ok=True)
@@ -423,8 +409,9 @@ async def import_all_json_files(
     if not json_files:
         return {"success": False, "message": "JSONファイルが見つかりません", "imported": 0}
 
-    # Collect all equipment items
-    all_items = []
+    total_imported = 0
+    all_errors = []
+
     for file_path in json_files:
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
@@ -437,104 +424,80 @@ async def import_all_json_files(
             else:
                 continue
 
-            for item in equipment_list:
-                item["_source_file"] = file_path.name
-                all_items.append(item)
+            for i, item in enumerate(equipment_list):
+                try:
+                    equipment_data = {
+                        "equipment_name": item.get("equipment_name"),
+                        "model_number": item.get("model_number"),
+                        "serial_number": item.get("serial_number"),
+                        "manufacturer": item.get("manufacturer"),
+                        "weight": item.get("weight"),
+                        "output_power": item.get("output_power"),
+                        "engine_model": item.get("engine_model"),
+                        "year_manufactured": item.get("year_manufactured"),
+                        "specifications": item.get("specifications"),
+                        "raw_text": item.get("raw_text", f"(JSONインポート: {file_path.name})"),
+                        "ocr_engine": "json-import",
+                        "llm_engine": "json-import",
+                        "file_name": item.get("file_name") or file_path.name
+                    }
+                    database.create_equipment(equipment_data)
+                    total_imported += 1
+                except Exception as e:
+                    all_errors.append({"file": file_path.name, "index": i, "error": str(e)})
         except Exception as e:
-            json_import_progress["errors"].append({"file": file_path.name, "error": str(e)})
-
-    if not all_items:
-        return {"success": False, "message": "インポート可能なデータがありません", "imported": 0}
-
-    # Reset progress
-    json_import_progress["status"] = "processing"
-    json_import_progress["total"] = len(all_items)
-    json_import_progress["current"] = 0
-    json_import_progress["current_item"] = ""
-    json_import_progress["images_found"] = 0
-    json_import_progress["errors"] = []
-
-    # Start background processing
-    background_tasks.add_task(
-        _import_json_with_images_background,
-        all_items,
-        fetch_images
-    )
+            all_errors.append({"file": file_path.name, "error": str(e)})
 
     return {
         "success": True,
-        "message": "インポート処理を開始しました",
-        "total": len(all_items),
-        "fetch_images": fetch_images
+        "imported": total_imported,
+        "files_processed": len(json_files),
+        "errors": all_errors
     }
 
 
-async def _import_json_with_images_background(items: List[dict], fetch_images: bool):
-    """Background task to import JSON items with optional image fetching."""
-    total_imported = 0
+@router.post("/equipment/{equipment_id}/fetch-image")
+async def fetch_equipment_image(equipment_id: int):
+    """Fetch product image for a specific equipment using web search."""
+    import traceback
 
-    for i, item in enumerate(items):
-        source_file = item.pop("_source_file", "unknown")
-        equipment_name = item.get("equipment_name", "")
-        model_number = item.get("model_number", "")
-        manufacturer = item.get("manufacturer", "")
+    # Get equipment data
+    equipment = database.get_equipment(equipment_id)
+    if not equipment:
+        raise HTTPException(status_code=404, detail="Equipment not found")
 
-        # Update progress
-        json_import_progress["current"] = i + 1
-        json_import_progress["current_item"] = equipment_name or model_number or f"Item {i+1}"
+    equipment_name = equipment.get("equipment_name", "")
+    model_number = equipment.get("model_number", "")
+    manufacturer = equipment.get("manufacturer", "")
 
-        try:
-            # Search for product image if enabled
-            image_path = None
-            if fetch_images:
-                try:
-                    image_path = await search_product_image(
-                        equipment_name,
-                        model_number,
-                        manufacturer
-                    )
-                    if image_path:
-                        json_import_progress["images_found"] += 1
-                except Exception as e:
-                    print(f"Image search failed for {equipment_name}: {e}")
+    result = {
+        "equipment_id": equipment_id,
+        "equipment_name": equipment_name,
+        "model_number": model_number,
+        "manufacturer": manufacturer,
+        "success": False,
+        "image_path": None,
+        "message": ""
+    }
 
-                # Add small delay to avoid rate limiting
-                await asyncio.sleep(0.5)
+    try:
+        # Search for product image
+        image_path = await search_product_image(equipment_name, model_number, manufacturer)
 
-            equipment_data = {
-                "equipment_name": equipment_name,
-                "model_number": model_number,
-                "serial_number": item.get("serial_number"),
-                "manufacturer": manufacturer,
-                "weight": item.get("weight"),
-                "output_power": item.get("output_power"),
-                "engine_model": item.get("engine_model"),
-                "year_manufactured": item.get("year_manufactured"),
-                "specifications": item.get("specifications"),
-                "raw_text": item.get("raw_text", f"(JSONインポート: {source_file})"),
-                "ocr_engine": "json-import",
-                "llm_engine": "json-import",
-                "file_name": item.get("file_name") or source_file,
-                "image_path": image_path
-            }
-            database.create_equipment(equipment_data)
-            total_imported += 1
+        if image_path:
+            # Update equipment with image path
+            database.update_equipment(equipment_id, {"image_path": image_path})
+            result["success"] = True
+            result["image_path"] = image_path
+            result["message"] = "画像を取得しました"
+        else:
+            result["message"] = "画像が見つかりませんでした"
 
-        except Exception as e:
-            json_import_progress["errors"].append({
-                "item": equipment_name or f"Item {i+1}",
-                "error": str(e)
-            })
+    except Exception as e:
+        result["message"] = f"エラー: {str(e)}"
+        result["traceback"] = traceback.format_exc()
 
-    json_import_progress["status"] = "completed"
-    json_import_progress["current_item"] = ""
-    print(f"JSON import completed: {total_imported} items, {json_import_progress['images_found']} images")
-
-
-@router.get("/json-import/progress")
-async def get_json_import_progress():
-    """Get progress of JSON import with image fetching."""
-    return json_import_progress
+    return result
 
 
 @router.post("/test-image-search")
