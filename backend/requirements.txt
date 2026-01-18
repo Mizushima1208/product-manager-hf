@@ -14,3 +14,4 @@ paddlepaddle
 paddleocr
 httpx
 tavily-python
+supabase

@@ -19,12 +19,99 @@ Equipment and signboard inventory management system with OCR capabilities.
 - Web search for equipment manuals/specifications
 - JSON bulk import with automatic product image search
 
-## Persistent Storage Setup
+## Database Setup (Supabase - 無料)
 
-**重要**: データを永続化するには、HuggingFace SpaceのSettingsで「Persistent Storage」を有効にしてください。
+データを永続化するには、Supabase（無料）を使用します。
 
-1. Space Settings → Repository secrets の下にある「Persistent storage」セクション
-2. 「Enable persistent storage」をクリック
-3. Spaceを再起動
+### 1. Supabaseプロジェクトの作成
 
-これにより、登録した機械データと製品画像が Space 再起動後も保持されます。
+1. [Supabase](https://supabase.com/) でアカウント作成
+2. 「New Project」でプロジェクトを作成
+3. Project Settings → API から以下を取得:
+   - **Project URL** (例: `https://xxxxx.supabase.co`)
+   - **anon public key** (API Keys セクション)
+
+### 2. テーブルの作成
+
+Supabase Dashboard の SQL Editor で以下を実行:
+
+```sql
+-- 機器テーブル
+CREATE TABLE equipment (
+    id SERIAL PRIMARY KEY,
+    equipment_name TEXT,
+    model_number TEXT,
+    serial_number TEXT,
+    purchase_date TEXT,
+    tool_category TEXT,
+    manufacturer TEXT,
+    weight TEXT,
+    output_power TEXT,
+    engine_model TEXT,
+    year_manufactured TEXT,
+    specifications TEXT,
+    raw_text TEXT,
+    ocr_engine TEXT,
+    llm_engine TEXT,
+    file_name TEXT,
+    image_path TEXT,
+    quantity INTEGER DEFAULT 1,
+    notes TEXT,
+    created_at TEXT,
+    updated_at TEXT
+);
+
+-- 看板テーブル
+CREATE TABLE signboards (
+    id SERIAL PRIMARY KEY,
+    comment TEXT,
+    description TEXT,
+    size TEXT,
+    quantity INTEGER DEFAULT 1,
+    location TEXT,
+    status TEXT DEFAULT '在庫あり',
+    notes TEXT,
+    image_path TEXT,
+    created_at TEXT,
+    updated_at TEXT
+);
+
+-- 看板数量履歴テーブル
+CREATE TABLE signboard_quantity_history (
+    id SERIAL PRIMARY KEY,
+    signboard_id INTEGER NOT NULL REFERENCES signboards(id),
+    change_type TEXT NOT NULL,
+    change_amount INTEGER NOT NULL,
+    quantity_before INTEGER NOT NULL,
+    quantity_after INTEGER NOT NULL,
+    reason TEXT NOT NULL,
+    created_at TEXT
+);
+
+-- API使用量テーブル
+CREATE TABLE api_usage (
+    id SERIAL PRIMARY KEY,
+    api_name TEXT NOT NULL,
+    year_month TEXT NOT NULL,
+    usage_count INTEGER DEFAULT 0,
+    free_limit INTEGER DEFAULT 1000,
+    created_at TEXT,
+    updated_at TEXT,
+    UNIQUE(api_name, year_month)
+);
+```
+
+### 3. HuggingFace Spaceに環境変数を設定
+
+Space Settings → Repository secrets で以下を追加:
+
+| Name | Value |
+|------|-------|
+| `SUPABASE_URL` | `https://xxxxx.supabase.co` (Project URL) |
+| `SUPABASE_KEY` | `eyJhbGciOiJIUzI1...` (anon public key) |
+
+### 4. Spaceを再起動
+
+設定後、Spaceを再起動すると自動的にSupabaseに接続されます。
+
+> **Note**: Supabase未設定の場合はSQLiteにフォールバックしますが、HuggingFace Space再起動時にデータは消えます。
