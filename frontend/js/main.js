@@ -719,6 +719,42 @@ function closeJsonImportModal() {
     document.getElementById('json-import-modal').classList.remove('visible');
 }
 
+// JSON一括インポート（data/json-importフォルダから）
+async function importAllJsonFiles() {
+    if (!confirm('json-importフォルダのJSONファイルをインポートしますか？')) {
+        return;
+    }
+
+    const btn = document.getElementById('import-all-json-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-small"></span> インポート中...';
+
+    try {
+        const response = await fetch('/api/json-import/import-all', {
+            method: 'POST'
+        });
+
+        if (!response.ok) {
+            throw new Error('インポートに失敗しました');
+        }
+
+        const data = await response.json();
+
+        if (data.success) {
+            showToast(`${data.imported}件の機械をインポートしました`);
+            loadEquipment();
+        } else {
+            showToast(data.message || 'インポートに失敗しました', 'error');
+        }
+    } catch (error) {
+        showToast('インポートに失敗しました', 'error');
+        console.error('Import error:', error);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '📥 一括インポート';
+    }
+}
+
 async function submitJsonImport() {
     const fileInput = document.getElementById('json-file-input');
     const pasteInput = document.getElementById('json-paste-input');
@@ -1250,6 +1286,12 @@ function setupEventListeners() {
     const importJsonBtn = document.getElementById('import-json-btn');
     if (importJsonBtn) {
         importJsonBtn.addEventListener('click', openJsonImportModal);
+    }
+
+    // JSON一括インポート
+    const importAllJsonBtn = document.getElementById('import-all-json-btn');
+    if (importAllJsonBtn) {
+        importAllJsonBtn.addEventListener('click', importAllJsonFiles);
     }
     const closeJsonImportBtn = document.getElementById('close-json-import-modal');
     if (closeJsonImportBtn) {

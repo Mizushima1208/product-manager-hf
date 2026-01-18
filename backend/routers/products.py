@@ -274,6 +274,68 @@ async def import_json_from_folder(filename: str):
         raise HTTPException(status_code=400, detail=f"Invalid JSON: {str(e)}")
 
 
+@router.post("/json-import/import-all")
+async def import_all_json_files():
+    """Import all JSON files from the data/json-import folder at once."""
+    import json
+
+    JSON_IMPORT_PATH.mkdir(parents=True, exist_ok=True)
+
+    json_files = [
+        f for f in JSON_IMPORT_PATH.iterdir()
+        if f.is_file() and f.suffix.lower() == '.json'
+    ]
+
+    if not json_files:
+        return {"success": False, "message": "JSONファイルが見つかりません", "imported": 0}
+
+    total_imported = 0
+    all_errors = []
+
+    for file_path in json_files:
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+
+            if isinstance(data, list):
+                equipment_list = data
+            elif isinstance(data, dict):
+                equipment_list = data.get("equipment", [data])
+            else:
+                continue
+
+            for i, item in enumerate(equipment_list):
+                try:
+                    equipment_data = {
+                        "equipment_name": item.get("equipment_name"),
+                        "model_number": item.get("model_number"),
+                        "serial_number": item.get("serial_number"),
+                        "manufacturer": item.get("manufacturer"),
+                        "weight": item.get("weight"),
+                        "output_power": item.get("output_power"),
+                        "engine_model": item.get("engine_model"),
+                        "year_manufactured": item.get("year_manufactured"),
+                        "specifications": item.get("specifications"),
+                        "raw_text": item.get("raw_text", f"(JSONインポート: {file_path.name})"),
+                        "ocr_engine": "json-import",
+                        "llm_engine": "json-import",
+                        "file_name": item.get("file_name") or file_path.name
+                    }
+                    database.create_equipment(equipment_data)
+                    total_imported += 1
+                except Exception as e:
+                    all_errors.append({"file": file_path.name, "index": i, "error": str(e)})
+        except Exception as e:
+            all_errors.append({"file": file_path.name, "error": str(e)})
+
+    return {
+        "success": True,
+        "imported": total_imported,
+        "files_processed": len(json_files),
+        "errors": all_errors
+    }
+
+
 @router.post("/equipment/upload")
 async def upload_equipment(
     file: UploadFile = File(...),
